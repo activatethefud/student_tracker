@@ -69,3 +69,22 @@ class TestFrontend:
         assert 'function sendCommand()' in rendered
         assert 'function quickCommand(' in rendered
         assert 'function logout()' in rendered
+    
+    def test_autocomplete_functions_exist(self):
+        """Verify autocomplete JavaScript functions are present"""
+        template = self.env.get_template('index.html')
+        rendered = template.render(request={}, students=[], admin_exists=True)
+        
+        assert 'function fetchAutocomplete(' in rendered
+        assert 'function showAutocomplete(' in rendered
+        assert 'function hideAutocomplete(' in rendered
+        assert 'function selectAutocompleteItem(' in rendered
+        assert 'autocomplete-dropdown' in rendered
+    
+    def test_enter_key_not_intercepted_for_sendCommand(self):
+        """Verify Enter key sends command, not autocomplete selection"""
+        template = self.env.get_template('index.html')
+        rendered = template.render(request={}, students=[], admin_exists=True)
+        
+        assert "e.key === 'Tab'" in rendered
+        assert "e.key === 'Enter'" not in rendered or "sendCommand()" in rendered

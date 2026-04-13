@@ -323,7 +323,7 @@
                     active.classList.remove('active');
                     active.previousElementSibling.classList.add('active');
                 }
-            } else if (e.key === 'Tab' || e.key === 'Enter') {
+            } else if (e.key === 'Tab') {
                 if (active) {
                     e.preventDefault();
                     selectAutocompleteItem(active);
