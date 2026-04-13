@@ -207,3 +207,21 @@ class TestInitAdmin:
         client.post("/api/init-admin?username=testuser&password=testpass")
         response = client.post("/token", data={"username": "testuser", "password": "testpass"})
         assert response.status_code == 200
+
+
+class TestSetupPage:
+    def test_setup_page_shows_when_no_admin(self, client):
+        response = client.get("/setup")
+        assert response.status_code == 200
+        assert "setup.html" in response.text or "Setup" in response.text
+    
+    def test_setup_page_redirects_when_admin_exists(self, client, admin_user):
+        response = client.get("/setup", follow_redirects=False)
+        assert response.status_code == 307
+        assert response.headers["location"] == "/"
+    
+    def test_setup_page_renders_form(self, client):
+        response = client.get("/setup")
+        assert response.status_code == 200
+        assert "username" in response.text.lower()
+        assert "password" in response.text.lower()

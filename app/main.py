@@ -4,6 +4,7 @@ from fastapi import FastAPI, Depends, HTTPException, status, Response
 from fastapi.security import OAuth2PasswordBearer, OAuth2PasswordRequestForm
 from starlette.staticfiles import StaticFiles
 from starlette.templating import Jinja2Templates
+from starlette.responses import RedirectResponse
 from sqlalchemy.orm import Session
 import bcrypt
 from jose import JWTError, jwt
@@ -102,7 +103,6 @@ def home(db: Session = Depends(get_db)):
 def setup_page(db: Session = Depends(get_db)):
     admin_exists = db.query(User).first() is not None
     if admin_exists:
-        from fastapi import RedirectResponse
         return RedirectResponse("/")
     return templates.TemplateResponse("setup.html", {"request": {}})
 
