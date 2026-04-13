@@ -107,31 +107,29 @@ def parse_command(command: str) -> dict:
         date_str = None
         name_parts = []
         behavior_keywords = {"positive", "negative", "neutral"}
+        collecting_note = False
+        note_parts = []
         for arg in args:
-            if arg.startswith("--"):
-                if arg in ("--date", "--at"):
-                    pass
-                else:
-                    break
-            elif arg.lower() in behavior_keywords and not name_parts:
-                pass
+            if arg in ("--note",):
+                collecting_note = True
+                continue
+            elif arg.startswith("--"):
+                collecting_note = False
+            elif collecting_note:
+                note_parts.append(arg.strip('"'))
+                continue
             elif arg.lower() in behavior_keywords:
                 behavior_type = arg.lower()
-                break
-            elif arg in ("--date", "--at"):
-                break
+                continue
             else:
                 name_parts.append(arg)
         name = " ".join(name_parts)
         if not name:
             return {"action": "error", "message": "Usage: /behavior <name> <type> [--note \"text\"] [--date YYYY-MM-DD]"}
+        note = " ".join(note_parts).strip('"') if note_parts else ""
         for i, arg in enumerate(args):
-            if arg == "--note" and i + 1 < len(args):
-                note = " ".join(args[i+1:]).strip('"')
-            elif arg in ("--date", "--at") and i + 1 < len(args):
+            if arg in ("--date", "--at") and i + 1 < len(args):
                 date_str = args[i + 1]
-            elif arg.lower() in behavior_keywords:
-                behavior_type = arg.lower()
         return {"action": "add_behavior", "student_name": name, "behavior_type": behavior_type, "note": note, "date": date_str}
     
     if cmd in ("attendance", "attend"):
@@ -167,34 +165,44 @@ def parse_command(command: str) -> dict:
         title_parts = []
         due_date = None
         status = "pending"
-        capture_status = False
+        collecting_status = False
+        skip_next = False
+        status_parts = []
         
-        for i, arg in enumerate(args):
-            if i == 0:
+        for i, arg in enumerate(args[1:], 1):
+            if skip_next:
+                due_date = arg
+                skip_next = False
                 continue
             if arg in ("--due", "--by"):
-                capture_status = False
-                if i + 1 < len(args):
-                    due_date = args[i + 1]
+                collecting_status = False
+                skip_next = True
+                continue
             elif arg == "--status":
-                capture_status = True
+                collecting_status = True
+                status_parts = []
                 status = None
-            elif capture_status:
-                if arg.startswith("--"):
-                    capture_status = False
-                    i -= 1
-                elif status is None:
-                    status = arg.strip('"')
-                else:
-                    status += " " + arg.strip('"')
-            elif not arg.startswith("--"):
-                title_parts.append(arg)
+                continue
+            elif arg.startswith("--"):
+                collecting_status = False
+                skip_next = False
+                continue
+            
+            if collecting_status:
+                status_parts.append(arg.strip('"'))
+            else:
+                title_parts.append(arg.strip('"'))
         
         title = " ".join(title_parts)
         if title.startswith('"') and title.endswith('"'):
             title = title[1:-1]
+        if status_parts:
+            status = " ".join(status_parts)
         if status is None:
             status = "pending"
+        
+        if not title:
+            return {"action": "error", "message": "Usage: /homework <name> <title> [--due YYYY-MM-DD] [--status <status>]"}
         
         return {"action": "add_homework", "student_name": student_name, "title": title, "due_date": due_date, "status": status}
     
