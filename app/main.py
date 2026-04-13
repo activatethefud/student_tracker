@@ -377,6 +377,20 @@ def generate_pdf(student_name: str, date_from: str = None, date_to: str = None, 
     return Response(content=pdf_content, media_type="application/pdf", headers={"Content-Disposition": f"attachment; filename=report_{student_name}.pdf"})
 
 
+@app.post("/api/reset-admin")
+def reset_admin(username: str = "admin", password: str = "admin123", master_password: str = "", db: Session = Depends(get_db)):
+    if master_password != settings.master_password:
+        return {"success": False, "message": "Invalid master password"}
+    
+    db.query(User).delete()
+    db.commit()
+    
+    admin = User(username=username, hashed_password=get_password_hash(password))
+    db.add(admin)
+    db.commit()
+    return {"success": True, "message": f"Admin reset. Username: {username}, Password: {password}"}
+
+
 if __name__ == "__main__":
     import uvicorn
     uvicorn.run(app, host="0.0.0.0", port=8000)

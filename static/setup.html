@@ -14,7 +14,7 @@
             <p class="text-gray-600 mt-2">Create your admin account to get started</p>
         </div>
         
-        <form hx-post="/api/init-admin" hx-target="#result" class="space-y-4">
+        <form id="admin-form" class="space-y-4">
             <div>
                 <label for="username" class="block text-sm font-medium text-gray-700">Username</label>
                 <input type="text" id="username" name="username" required
@@ -36,6 +36,16 @@
                        placeholder="Confirm password">
             </div>
             
+            <hr class="my-4">
+            
+            <div class="bg-yellow-50 border border-yellow-200 rounded p-3">
+                <p class="text-sm text-yellow-800 font-medium">Reset existing admin?</p>
+                <p class="text-xs text-yellow-600 mb-2">Enter master password to reset</p>
+                <input type="password" id="master_password" name="master_password"
+                       class="w-full border rounded px-3 py-2 text-sm"
+                       placeholder="Master password (optional)">
+            </div>
+            
             <button type="submit"
                     class="w-full bg-blue-500 text-white py-2 rounded hover:bg-blue-600 transition">
                 Create Admin Account
@@ -50,12 +60,41 @@
     </div>
     
     <script>
-        document.querySelector('form').addEventListener('htmx:afterRequest', function(evt) {
-            const result = document.getElementById('result');
-            if (result.innerHTML.includes('success')) {
-                setTimeout(function() {
-                    window.location.href = '/';
-                }, 1500);
+        document.getElementById('admin-form').addEventListener('submit', async function(e) {
+            e.preventDefault();
+            
+            const username = document.getElementById('username').value;
+            const password = document.getElementById('password').value;
+            const confirmPassword = document.getElementById('confirm_password').value;
+            const masterPassword = document.getElementById('master_password').value;
+            
+            if (password !== confirmPassword) {
+                document.getElementById('result').innerHTML = '<div class="text-red-500">Passwords do not match</div>';
+                return;
+            }
+            
+            const resultDiv = document.getElementById('result');
+            resultDiv.innerHTML = '<div class="text-gray-500">Processing...</div>';
+            
+            let url = '/api/init-admin?username=' + encodeURIComponent(username) + '&password=' + encodeURIComponent(password);
+            if (masterPassword) {
+                url = '/api/reset-admin?username=' + encodeURIComponent(username) + '&password=' + encodeURIComponent(password) + '&master_password=' + encodeURIComponent(masterPassword);
+            }
+            
+            try {
+                const response = await fetch(url, { method: 'POST' });
+                const data = await response.json();
+                
+                if (data.success) {
+                    resultDiv.innerHTML = '<div class="text-green-500">' + data.message + '</div>';
+                    setTimeout(function() {
+                        window.location.href = '/';
+                    }, 1500);
+                } else {
+                    resultDiv.innerHTML = '<div class="text-red-500">' + data.message + '</div>';
+                }
+            } catch (err) {
+                resultDiv.innerHTML = '<div class="text-red-500">Error: ' + err.message + '</div>';
             }
         });
     </script>
