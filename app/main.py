@@ -472,15 +472,15 @@ def update_student(student_name: str, update: StudentUpdate, db: Session = Depen
     return {"success": True, "message": f"Updated student {student_name}"}
 
 
-@app.delete("/api/students/{student_name}")
-def delete_student(student_name: str, db: Session = Depends(get_db), current_user: User = Depends(get_current_user)):
-    student = db.query(Student).filter(Student.name == student_name).first()
-    if not student:
-        raise HTTPException(status_code=404, detail="Student not found")
+@app.delete("/api/students/{student_identifier}")
+def delete_student(student_identifier: str, db: Session = Depends(get_db), current_user: User = Depends(get_current_user)):
+    student, error = resolve_student(db, student_identifier)
+    if error:
+        raise HTTPException(status_code=404, detail=f"Student '{student_identifier}' not found. {error if 'not found' in error.lower() else ''}")
     
     db.delete(student)
     db.commit()
-    return {"success": True, "message": f"Deleted student {student_name} and all related records"}
+    return {"success": True, "message": f"Deleted student {student.name} (ID: {student.student_id}) and all related records"}
 
 
 @app.post("/api/setup-admin")
