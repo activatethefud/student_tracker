@@ -7,7 +7,7 @@ from app.main import app, get_db, failed_login_attempts
 from app.models import Base, Student, User
 
 
-TEST_DATABASE_URL = "sqlite:///./test.db"
+TEST_DATABASE_URL = "sqlite:///./test_api.db"
 engine = create_engine(TEST_DATABASE_URL, connect_args={"check_same_thread": False})
 TestingSessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=engine)
 
@@ -747,3 +747,26 @@ class TestActivityAPI:
         
         activities = db.query(Activity).all()
         assert len(activities) == 0
+    
+    def test_activity_in_report(self, client, admin_user, student, db):
+        login = client.post("/token", data={"username": "admin", "password": "test"})
+        token = login.json()["access_token"]
+        
+        from app.models import Activity
+        a1 = Activity(student_id=student.id, activity_type="focus", status="yes")
+        a2 = Activity(student_id=student.id, activity_type="focus", status="no")
+        a3 = Activity(student_id=student.id, activity_type="engagement", status="yes")
+        db.add_all([a1, a2, a3])
+        db.commit()
+        
+        response = client.post(
+            "/api/command",
+            json={"command": "/report John"},
+            headers={"Authorization": f"Bearer {token}"}
+        )
+        assert response.status_code == 200
+        data = response.json()
+        assert data["success"] is True
+        assert "focus" in data["message"]
+        assert "engagement" in data["message"]
+        assert "1 yes, 1 no" in data["message"]

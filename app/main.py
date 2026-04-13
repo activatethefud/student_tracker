@@ -129,7 +129,7 @@ class AttendanceCreate(BaseModel):
 
 class ActivityCreate(BaseModel):
     student_name: str
-    activity_type: str  # taking-notes, participation
+    activity_type: str  # any user-defined type
     status: str  # yes, no
 
 
@@ -718,11 +718,16 @@ def execute_command(request: CommandRequest, db: Session = Depends(get_db), curr
         report += f"Attendance: {len([a for a in attendances if a.status == 'present'])}/present, {len([a for a in attendances if a.status == 'absent'])}/absent\n"
         report += f"Homework: {len([h for h in homeworks if h.status.lower() == 'pending'])} pending, {len([h for h in homeworks if h.status.lower() == 'submitted'])} submitted, {len([h for h in homeworks if h.status.lower() not in ['pending', 'submitted']])} other\n"
         
-        taking_notes_yes = len([a for a in activities if a.activity_type == "taking-notes" and a.status == "yes"])
-        taking_notes_no = len([a for a in activities if a.activity_type == "taking-notes" and a.status == "no"])
-        participation_yes = len([a for a in activities if a.activity_type == "participation" and a.status == "yes"])
-        participation_no = len([a for a in activities if a.activity_type == "participation" and a.status == "no"])
-        report += f"Activity: Taking Notes - {taking_notes_yes} yes, {taking_notes_no} no; Participation - {participation_yes} yes, {participation_no} no"
+        if activities:
+            activity_types = sorted(set(a.activity_type for a in activities))
+            activity_parts = []
+            for atype in activity_types:
+                yes_count = len([a for a in activities if a.activity_type == atype and a.status == "yes"])
+                no_count = len([a for a in activities if a.activity_type == atype and a.status == "no"])
+                activity_parts.append(f"{atype}: {yes_count} yes, {no_count} no")
+            report += f"Activity: {'; '.join(activity_parts)}"
+        else:
+            report += "Activity: None"
         
         if cmd.get("pdf"):
             from app.pdf_generator import generate_pdf_report
@@ -765,6 +770,7 @@ def generate_pdf(student_name: str, date_from: str = None, date_to: str = None, 
     behaviors = student.behaviors
     attendances = student.attendances
     homeworks = student.homeworks
+    activities = student.activities
     
     if date_from:
         from_date = datetime.strptime(date_from, "%Y-%m-%d")
@@ -772,6 +778,7 @@ def generate_pdf(student_name: str, date_from: str = None, date_to: str = None, 
         behaviors = [b for b in behaviors if b.created_at >= from_date]
         attendances = [a for a in attendances if a.date >= from_date]
         homeworks = [h for h in homeworks if h.created_at >= from_date]
+        activities = [a for a in activities if a.date >= from_date]
     
     if date_to:
         to_date = datetime.strptime(date_to, "%Y-%m-%d")
@@ -780,6 +787,7 @@ def generate_pdf(student_name: str, date_from: str = None, date_to: str = None, 
         behaviors = [b for b in behaviors if b.created_at < to_date]
         attendances = [a for a in attendances if a.date < to_date]
         homeworks = [h for h in homeworks if h.created_at < to_date]
+        activities = [a for a in activities if a.date < to_date]
     
     avg_grade = sum(g.score for g in grades) / len(grades) if grades else 0
     
@@ -791,7 +799,7 @@ def generate_pdf(student_name: str, date_from: str = None, date_to: str = None, 
     elif date_to:
         date_range = f"to {date_to}"
     
-    pdf_content = generate_pdf_report(student, grades, behaviors, attendances, homeworks, avg_grade, date_range)
+    pdf_content = generate_pdf_report(student, grades, behaviors, attendances, homeworks, activities, avg_grade, date_range)
     
     return Response(content=pdf_content, media_type="application/pdf", headers={"Content-Disposition": f"attachment; filename=report_{student_name}.pdf"})
 

@@ -61,6 +61,10 @@
                     {% endif %}
                 </div>
                 <div class="flex gap-2">
+                    <button onclick="downloadPDF()" 
+                            class="px-3 py-1 bg-green-500 text-white rounded hover:bg-green-600 text-sm whitespace-nowrap">
+                        Download PDF
+                    </button>
                     <button onclick="showStudentEditModal()" 
                             class="px-3 py-1 bg-blue-500 text-white rounded hover:bg-blue-600 text-sm whitespace-nowrap">
                         Edit Student
@@ -649,6 +653,35 @@
                 }, 3000);
             } else {
                 deleteRecord('student', '{{ student.student_id }}');
+            }
+        }
+        
+        async function downloadPDF() {
+            if (!authToken) {
+                showLogin();
+                return;
+            }
+            try {
+                const response = await fetch('/api/students/{{ student.name }}/report/pdf', {
+                    headers: { 'Authorization': 'Bearer ' + authToken }
+                });
+                if (response.ok) {
+                    const blob = await response.blob();
+                    const url = window.URL.createObjectURL(blob);
+                    const a = document.createElement('a');
+                    a.href = url;
+                    a.download = 'report_{{ student.name }}.pdf';
+                    document.body.appendChild(a);
+                    a.click();
+                    a.remove();
+                    window.URL.revokeObjectURL(url);
+                } else if (response.status === 401) {
+                    showLogin();
+                } else {
+                    alert('Failed to generate PDF');
+                }
+            } catch (err) {
+                alert('Error: ' + err);
             }
         }
         

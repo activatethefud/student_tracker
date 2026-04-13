@@ -100,7 +100,7 @@ class Activity(Base):
 
     id = Column(Integer, primary_key=True)
     student_id = Column(Integer, ForeignKey("students.id"), nullable=False)
-    activity_type = Column(String(50), nullable=False)  # taking-notes, participation
+    activity_type = Column(String(50), nullable=False)
     status = Column(String(10), nullable=False)  # yes, no
     date = Column(DateTime, default=datetime.utcnow)
     created_at = Column(DateTime, default=datetime.utcnow)
