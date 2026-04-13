@@ -383,6 +383,41 @@ class TestDashboardAPI:
         response = client.get("/student/NonExistent", headers={"Authorization": f"Bearer {token}"})
         assert response.status_code == 404
     
+    def test_get_student_dashboard_multi_word_name(self, client, admin_user, db):
+        login = client.post("/token", data={"username": "admin", "password": "test"})
+        token = login.json()["access_token"]
+        
+        client.post(
+            "/api/command",
+            json={"command": "/add-student Marko Stefanovic"},
+            headers={"Authorization": f"Bearer {token}"}
+        )
+        
+        response = client.get("/student/Marko%20Stefanovic")
+        assert response.status_code == 200
+        assert "Marko Stefanovic" in response.text
+    
+    def test_dashboard_redirect_url_encodes_name(self, client, admin_user, db):
+        login = client.post("/token", data={"username": "admin", "password": "test"})
+        token = login.json()["access_token"]
+        
+        response = client.post(
+            "/api/command",
+            json={"command": "/add-student Ana Garcia"},
+            headers={"Authorization": f"Bearer {token}"}
+        )
+        assert response.status_code == 200
+        
+        response = client.post(
+            "/api/command",
+            json={"command": "/dashboard Ana Garcia"},
+            headers={"Authorization": f"Bearer {token}"}
+        )
+        assert response.status_code == 200
+        data = response.json()
+        assert data["action"] == "redirect"
+        assert "Ana%20Garcia" in data["url"]
+    
     def test_delete_grade(self, client, admin_user, student, db):
         login = client.post("/token", data={"username": "admin", "password": "test"})
         token = login.json()["access_token"]

@@ -1,5 +1,6 @@
 from datetime import datetime, timedelta, date
 from typing import Optional
+from urllib.parse import quote
 from fastapi import FastAPI, Depends, HTTPException, status, Response
 from fastapi.security import OAuth2PasswordBearer, OAuth2PasswordRequestForm
 from starlette.staticfiles import StaticFiles
@@ -307,9 +308,11 @@ def list_students_page(db: Session = Depends(get_db)):
 
 @app.get("/student/{student_name}")
 def student_dashboard(student_name: str, db: Session = Depends(get_db)):
-    student = db.query(Student).filter(Student.name == student_name).first()
-    if not student:
-        raise HTTPException(status_code=404, detail=f"Student '{student_name}' not found")
+    student, error = resolve_student(db, student_name)
+    if error:
+        student = db.query(Student).filter(Student.name == student_name).first()
+        if not student:
+            raise HTTPException(status_code=404, detail=f"Student '{student_name}' not found")
     
     grades = student.grades
     behaviors = student.behaviors
@@ -741,7 +744,7 @@ def execute_command(request: CommandRequest, db: Session = Depends(get_db), curr
         student, error = resolve_student(db, cmd["student_name"])
         if error:
             return {"success": False, "message": error}
-        return {"success": True, "action": "redirect", "url": f"/student/{student.name}"}
+        return {"success": True, "action": "redirect", "url": f"/student/{quote(student.name, safe='')}"}
     
     if cmd["action"] == "list_dashboard":
         return {"success": True, "action": "redirect", "url": "/students"}

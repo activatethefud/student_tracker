@@ -52,7 +52,7 @@
             {% if students %}
             <div class="grid grid-cols-1 sm:grid-cols-2 gap-3">
                 {% for student in students %}
-                <a href="/student/{{ student.name }}" 
+                <a href="/student/{{ student.name|urlencode }}" 
                    class="block p-4 border rounded-lg hover:bg-blue-50 hover:border-blue-300 transition-colors">
                     <span class="font-medium text-lg">{{ student.name }}</span>
                     <span class="text-sm text-gray-500 block">

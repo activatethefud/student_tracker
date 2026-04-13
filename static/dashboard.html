@@ -433,11 +433,11 @@
         function showStudentEditModal() {
             document.getElementById('edit-modal-title').textContent = 'Edit Student';
             document.getElementById('edit-type').value = 'student';
-            document.getElementById('edit-id').value = '{{ student.name }}';
+            document.getElementById('edit-id').value = '{{ student.name|e }}';
             document.getElementById('edit-fields').innerHTML = `
                 <div>
                     <label class="block text-sm font-medium mb-1">Name</label>
-                    <input type="text" id="edit-name" value="{{ student.name }}" class="w-full border rounded px-3 py-2">
+                    <input type="text" id="edit-name" value="{{ student.name|e }}" class="w-full border rounded px-3 py-2">
                 </div>
                 <div>
                     <label class="block text-sm font-medium mb-1">Year (e.g., Grade 8)</label>
@@ -662,7 +662,7 @@
                 return;
             }
             try {
-                const response = await fetch('/api/students/{{ student.name }}/report/pdf', {
+                const response = await fetch('/api/students/{{ student.name|urlencode }}/report/pdf', {
                     headers: { 'Authorization': 'Bearer ' + authToken }
                 });
                 if (response.ok) {
@@ -670,7 +670,7 @@
                     const url = window.URL.createObjectURL(blob);
                     const a = document.createElement('a');
                     a.href = url;
-                    a.download = 'report_{{ student.name }}.pdf';
+                    a.download = 'report_{{ student.name|urlencode }}.pdf';
                     document.body.appendChild(a);
                     a.click();
                     a.remove();
