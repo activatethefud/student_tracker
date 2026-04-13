@@ -132,6 +132,16 @@ def startup():
     Base.metadata.create_all(engine)
     db = get_session(engine)
     try:
+        # Add new columns if they don't exist (for existing databases)
+        try:
+            db.execute("ALTER TABLE students ADD COLUMN student_id VARCHAR(20)")
+        except:
+            pass
+        try:
+            db.execute("ALTER TABLE students ADD COLUMN year VARCHAR(50)")
+        except:
+            pass
+        db.commit()
         assign_missing_student_ids(db)
     finally:
         db.close()
@@ -205,7 +215,7 @@ def add_student(student: StudentCreate, db: Session = Depends(get_db), current_u
 @app.get("/api/students")
 def list_students(db: Session = Depends(get_db), current_user: User = Depends(get_current_user)):
     students = db.query(Student).all()
-    return [{"id": s.id, "name": s.name, "details": s.details} for s in students]
+    return [{"id": s.id, "name": s.name, "student_id": s.student_id, "year": s.year, "details": s.details} for s in students]
 
 
 @app.post("/api/grades")

@@ -67,7 +67,8 @@ def admin_user(db):
 
 @pytest.fixture
 def student(db):
-    s = Student(name="John")
+    from app.models import generate_student_id
+    s = Student(name="John", student_id=generate_student_id(db))
     db.add(s)
     db.commit()
     db.refresh(s)
@@ -500,3 +501,124 @@ class TestDashboardAPI:
         
         response = client.delete("/api/grades/99999", headers={"Authorization": f"Bearer {token}"})
         assert response.status_code == 404
+
+
+class TestStudentIDAndYear:
+    def test_create_student_with_year(self, client, admin_user, db):
+        login = client.post("/token", data={"username": "admin", "password": "test"})
+        token = login.json()["access_token"]
+        
+        response = client.post(
+            "/api/command",
+            json={"command": "/add-student Alice --year Grade 8"},
+            headers={"Authorization": f"Bearer {token}"}
+        )
+        assert response.status_code == 200
+        data = response.json()
+        assert data["success"] is True
+        assert "Grade 8" in data["message"]
+        assert "STU-" in data["message"]
+    
+    def test_student_id_generated(self, client, admin_user, db):
+        login = client.post("/token", data={"username": "admin", "password": "test"})
+        token = login.json()["access_token"]
+        
+        client.post(
+            "/api/command",
+            json={"command": "/add-student Bob --year Grade 1"},
+            headers={"Authorization": f"Bearer {token}"}
+        )
+        
+        response = client.get("/api/students", headers={"Authorization": f"Bearer {token}"})
+        students = response.json()
+        # Check it's a list and contains expected data
+        assert isinstance(students, list)
+        bob = next((s for s in students if s["name"] == "Bob"), None)
+        assert bob is not None
+        assert bob.get("year") == "Grade 1"
+    
+    def test_report_with_student_id(self, client, admin_user, student, db):
+        login = client.post("/token", data={"username": "admin", "password": "test"})
+        token = login.json()["access_token"]
+        
+        # First add a grade so report has content
+        client.post(
+            "/api/command",
+            json={"command": "/grade John 90"},
+            headers={"Authorization": f"Bearer {token}"}
+        )
+        
+        # Get student to find ID
+        from app.models import Student
+        db.refresh(student)
+        student_id = student.student_id
+        
+        # Report with student ID
+        response = client.post(
+            "/api/command",
+            json={"command": f"/report {student_id}"},
+            headers={"Authorization": f"Bearer {token}"}
+        )
+        assert response.status_code == 200
+        data = response.json()
+        assert data["success"] is True
+        assert "John" in data["message"]
+    
+    def test_report_with_prefix_id(self, client, admin_user, student, db):
+        login = client.post("/token", data={"username": "admin", "password": "test"})
+        token = login.json()["access_token"]
+        
+        from app.models import Student
+        db.refresh(student)
+        student_id = student.student_id
+        prefix = student_id[:-1]  # Remove last character
+        
+        response = client.post(
+            "/api/command",
+            json={"command": f"/report {prefix}"},
+            headers={"Authorization": f"Bearer {token}"}
+        )
+        assert response.status_code == 200
+        data = response.json()
+        assert data["success"] is True
+    
+    def test_update_student_year(self, client, admin_user, student, db):
+        login = client.post("/token", data={"username": "admin", "password": "test"})
+        token = login.json()["access_token"]
+        
+        response = client.put(
+            "/api/students/John",
+            json={"year": "Grade 9"},
+            headers={"Authorization": f"Bearer {token}"}
+        )
+        assert response.status_code == 200
+        
+        db.refresh(student)
+        assert student.year == "Grade 9"
+    
+    def test_ambiguous_name_resolution(self, client, admin_user, db):
+        login = client.post("/token", data={"username": "admin", "password": "test"})
+        token = login.json()["access_token"]
+        
+        # Create two students with same name but different years
+        client.post(
+            "/api/command",
+            json={"command": '/add-student TestStudent --year "Grade 8"'},
+            headers={"Authorization": f"Bearer {token}"}
+        )
+        client.post(
+            "/api/command",
+            json={"command": '/add-student TestStudent --year "Grade 9"'},
+            headers={"Authorization": f"Bearer {token}"}
+        )
+        
+        # Try to report - should handle gracefully
+        response = client.post(
+            "/api/command",
+            json={"command": "/report TestStudent"},
+            headers={"Authorization": f"Bearer {token}"}
+        )
+        data = response.json()
+        # Should either work (if exact match by some logic) or show error with options
+        # The behavior depends on implementation
+        assert data["success"] is True or "Multiple students" in data.get("message", "")

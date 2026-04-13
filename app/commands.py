@@ -20,11 +20,34 @@ def parse_command(command: str) -> dict:
         student_name = args[0]
         year = None
         details = None
+        capture_year = False
+        capture_details = False
+        year_parts = []
+        details_parts = []
+        
         for i, arg in enumerate(args):
-            if arg in ("--year", "--yr", "-y") and i + 1 < len(args):
-                year = args[i + 1]
-            elif arg == "--details" and i + 1 < len(args):
-                details = args[i + 1]
+            if i == 0:
+                continue
+            if arg in ("--year", "--yr", "-y"):
+                capture_year = True
+                capture_details = False
+                year_parts = []
+            elif arg == "--details":
+                capture_year = False
+                capture_details = True
+                details_parts = []
+            elif arg.startswith("--"):
+                capture_year = False
+                capture_details = False
+            else:
+                if capture_year:
+                    year_parts.append(arg)
+                elif capture_details:
+                    details_parts.append(arg)
+        
+        year = " ".join(year_parts).strip('"') if year_parts else None
+        details = " ".join(details_parts).strip('"') if details_parts else None
+        
         return {"action": "add_student", "name": student_name, "year": year, "details": details}
     
     if cmd == "grade":
