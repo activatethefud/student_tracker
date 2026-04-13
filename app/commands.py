@@ -120,14 +120,21 @@ def parse_command(command: str) -> dict:
                 generate_pdf = True
         return {"action": "get_report", "student_name": student_name, "date_from": date_from, "date_to": date_to, "pdf": generate_pdf}
     
+    if cmd in ("dashboard", "dash", "d"):
+        if len(args) < 1:
+            return {"action": "list_dashboard"}
+        return {"action": "open_dashboard", "student_name": args[0]}
+    
     if cmd == "help":
         return {"action": "help", "message": """Available commands:
 /add-student <name> - Add a new student
 /grade <name> <score> [--subject <subject>] [--date YYYY-MM-DD] - Add a grade
 /behavior <name> <type> [--note "note"] [--date YYYY-MM-DD] - Record behavior (positive/negative/neutral)
 /attendance <name> present|absent|late [--date YYYY-MM-DD] - Mark attendance
-/homework <name> <title> [--due YYYY-MM-DD] [--status pending|submitted] - Add homework
+/homework <name> <title> [--due YYYY-MM-DD] [--status <status>] - Add homework
 /report <name> [--from YYYY-MM-DD] [--to YYYY-MM-DD] [--pdf] - Get student report
+/dashboard <name> - Open student dashboard
+/dashboard - List all students
 /help - Show this help"""}
     
     return {"action": "invalid", "message": f"Unknown command: /{cmd}. Type /help for available commands."}

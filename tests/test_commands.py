@@ -195,3 +195,17 @@ class TestParseCommand:
         result = parse_command('/homework John "Test" --status')
         assert result["action"] == "add_homework"
         assert result["status"] == "pending"
+    
+    def test_dashboard_command_with_name(self):
+        result = parse_command("/dashboard John")
+        assert result["action"] == "open_dashboard"
+        assert result["student_name"] == "John"
+    
+    def test_dashboard_command_no_name(self):
+        result = parse_command("/dashboard")
+        assert result["action"] == "list_dashboard"
+    
+    def test_dashboard_alias_dash(self):
+        result = parse_command("/dash John")
+        assert result["action"] == "open_dashboard"
+        assert result["student_name"] == "John"

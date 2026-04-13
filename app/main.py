@@ -573,6 +573,12 @@ def execute_command(request: CommandRequest, db: Session = Depends(get_db), curr
             return Response(content=pdf_content, media_type="application/pdf", headers={"Content-Disposition": f"attachment; filename=report_{student.name}.pdf"})
         
         return {"success": True, "message": report}
+    
+    if cmd["action"] == "open_dashboard":
+        return {"success": True, "action": "redirect", "url": f"/student/{cmd['student_name']}"}
+    
+    if cmd["action"] == "list_dashboard":
+        return {"success": True, "action": "redirect", "url": "/students"}
 
 
 @app.post("/api/init-admin")

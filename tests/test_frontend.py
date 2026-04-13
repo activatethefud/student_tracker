@@ -206,11 +206,10 @@ class TestFrontend:
         assert 'Delete Student' in rendered
     
     def test_index_has_dashboard_button(self):
-        """Verify quick reference has Dashboard link"""
+        """Verify quick reference has Dashboard button"""
         template = self.env.get_template('index.html')
         rendered = template.render(request={}, students=[], admin_exists=True)
-        assert 'Dashboard' in rendered
-        assert '/students' in rendered
+        assert '/dashboard' in rendered
     
     def test_dashboard_has_login_modal(self):
         """Verify dashboard has login modal"""
