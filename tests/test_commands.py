@@ -145,3 +145,33 @@ class TestParseCommand:
     def test_attendance_with_at_alias(self):
         result = parse_command("/attendance John late --at 2024-01-15")
         assert result["date"] == "2024-01-15"
+
+    def test_homework_basic(self):
+        result = parse_command('/homework John "Read chapter 5"')
+        assert result["action"] == "add_homework"
+        assert result["student_name"] == "John"
+        assert result["title"] == "Read chapter 5"
+        assert result["status"] == "pending"
+    
+    def test_homework_with_due_date(self):
+        result = parse_command('/homework John "Read chapter 5" --due 2024-04-15')
+        assert result["action"] == "add_homework"
+        assert result["due_date"] == "2024-04-15"
+    
+    def test_homework_with_status(self):
+        result = parse_command('/homework John "Math worksheet" --status submitted')
+        assert result["action"] == "add_homework"
+        assert result["status"] == "submitted"
+    
+    def test_homework_with_due_and_status(self):
+        result = parse_command('/homework John "Essay" --due 2024-05-01 --status submitted')
+        assert result["due_date"] == "2024-05-01"
+        assert result["status"] == "submitted"
+    
+    def test_homework_missing_args(self):
+        result = parse_command("/homework John")
+        assert result["action"] == "error"
+    
+    def test_homework_invalid_status(self):
+        result = parse_command('/homework John "Test" --status unknown')
+        assert result["action"] == "error"

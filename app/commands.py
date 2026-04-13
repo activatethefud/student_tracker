@@ -64,6 +64,25 @@ def parse_command(command: str) -> dict:
             return {"action": "error", "message": "Usage: /attendance <name> present|absent|late [--date YYYY-MM-DD]"}
         return {"action": "mark_attendance", "student_name": args[0], "status": args[status_idx].lower(), "date": date_str}
     
+    if cmd in ("homework", "hw"):
+        if len(args) < 2:
+            return {"action": "error", "message": "Usage: /homework <name> <title> [--due YYYY-MM-DD] [--status pending|submitted]"}
+        student_name = args[0]
+        title = " ".join(args[1:])
+        if title.startswith('"') and title.endswith('"'):
+            title = title[1:-1]
+        due_date = None
+        status = "pending"
+        for i, arg in enumerate(args):
+            if arg in ("--due", "--by") and i + 1 < len(args):
+                due_date = args[i + 1]
+            elif arg == "--status" and i + 1 < len(args):
+                if args[i + 1].lower() in ("pending", "submitted"):
+                    status = args[i + 1].lower()
+                else:
+                    return {"action": "error", "message": "Status must be 'pending' or 'submitted'"}
+        return {"action": "add_homework", "student_name": student_name, "title": title, "due_date": due_date, "status": status}
+    
     if cmd in ("report", "stats"):
         if len(args) < 1:
             return {"action": "error", "message": "Usage: /report <name> [--from YYYY-MM-DD] [--to YYYY-MM-DD] [--pdf]"}
@@ -88,6 +107,7 @@ def parse_command(command: str) -> dict:
 /grade <name> <score> [--subject <subject>] [--date YYYY-MM-DD] - Add a grade
 /behavior <name> <type> [--note "note"] [--date YYYY-MM-DD] - Record behavior (positive/negative/neutral)
 /attendance <name> present|absent|late [--date YYYY-MM-DD] - Mark attendance
+/homework <name> <title> [--due YYYY-MM-DD] [--status pending|submitted] - Add homework
 /report <name> [--from YYYY-MM-DD] [--to YYYY-MM-DD] [--pdf] - Get student report
 /help - Show this help"""}
     

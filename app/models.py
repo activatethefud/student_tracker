@@ -16,6 +16,7 @@ class Student(Base):
     grades = relationship("Grade", back_populates="student", cascade="all, delete-orphan")
     behaviors = relationship("Behavior", back_populates="student", cascade="all, delete-orphan")
     attendances = relationship("Attendance", back_populates="student", cascade="all, delete-orphan")
+    homeworks = relationship("Homework", back_populates="student", cascade="all, delete-orphan")
 
 
 class Grade(Base):
@@ -51,6 +52,19 @@ class Attendance(Base):
     date = Column(DateTime, default=datetime.utcnow)
 
     student = relationship("Student", back_populates="attendances")
+
+
+class Homework(Base):
+    __tablename__ = "homeworks"
+
+    id = Column(Integer, primary_key=True)
+    student_id = Column(Integer, ForeignKey("students.id"), nullable=False)
+    title = Column(String(200), nullable=False)
+    due_date = Column(DateTime, nullable=True)
+    status = Column(String(20), default="pending")  # pending, submitted
+    created_at = Column(DateTime, default=datetime.utcnow)
+
+    student = relationship("Student", back_populates="homeworks")
 
 
 class User(Base):

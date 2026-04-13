@@ -10,7 +10,7 @@ import bcrypt
 from jose import JWTError, jwt
 from pydantic import BaseModel
 
-from app.models import Base, get_engine, get_session, Student, Grade, Behavior, Attendance, User
+from app.models import Base, get_engine, get_session, Student, Grade, Behavior, Attendance, Homework, User
 from app.config import settings
 from app.commands import parse_command
 
@@ -301,6 +301,21 @@ def execute_command(request: CommandRequest, db: Session = Depends(get_db), curr
         date_msg = f" (dated: {cmd['date']})" if cmd.get("date") else ""
         return {"success": True, "message": f"Marked {cmd['student_name']} as {cmd['status']}{date_msg}"}
     
+    if cmd["action"] == "add_homework":
+        student = db.query(Student).filter(Student.name == cmd["student_name"]).first()
+        if not student:
+            return {"success": False, "message": f"Student '{cmd['student_name']}' not found. Use /add-student first."}
+        new_homework = Homework(student_id=student.id, title=cmd["title"], status=cmd["status"])
+        if cmd.get("due_date"):
+            try:
+                new_homework.due_date = datetime.strptime(cmd["due_date"], "%Y-%m-%d")
+            except ValueError:
+                pass
+        db.add(new_homework)
+        db.commit()
+        due_msg = f", due: {cmd['due_date']}" if cmd.get("due_date") else ""
+        return {"success": True, "message": f"Added homework for {cmd['student_name']}: {cmd['title']} (status: {cmd['status']}){due_msg}"}
+    
     if cmd["action"] == "get_report":
         student = db.query(Student).filter(Student.name == cmd["student_name"]).first()
         if not student:
@@ -309,6 +324,7 @@ def execute_command(request: CommandRequest, db: Session = Depends(get_db), curr
         grades = student.grades
         behaviors = student.behaviors
         attendances = student.attendances
+        homeworks = student.homeworks
         
         date_from = cmd.get("date_from")
         date_to = cmd.get("date_to")
@@ -319,6 +335,7 @@ def execute_command(request: CommandRequest, db: Session = Depends(get_db), curr
                 grades = [g for g in grades if g.created_at >= from_date]
                 behaviors = [b for b in behaviors if b.created_at >= from_date]
                 attendances = [a for a in attendances if a.date >= from_date]
+                homeworks = [h for h in homeworks if h.created_at >= from_date]
             except ValueError:
                 pass
         
@@ -329,6 +346,7 @@ def execute_command(request: CommandRequest, db: Session = Depends(get_db), curr
                 grades = [g for g in grades if g.created_at < to_date]
                 behaviors = [b for b in behaviors if b.created_at < to_date]
                 attendances = [a for a in attendances if a.date < to_date]
+                homeworks = [h for h in homeworks if h.created_at < to_date]
             except ValueError:
                 pass
         
@@ -346,12 +364,13 @@ def execute_command(request: CommandRequest, db: Session = Depends(get_db), curr
         report += f"Average Grade: {avg_grade:.2f}\n"
         report += f"Grades: {', '.join(f'{g.score} ({g.subject})' for g in grades) or 'None'}\n"
         report += f"Behaviors: {', '.join(f'{b.behavior_type}' for b in behaviors) or 'None'}\n"
-        report += f"Attendance: {len([a for a in attendances if a.status == 'present'])}/present, {len([a for a in attendances if a.status == 'absent'])}/absent"
+        report += f"Attendance: {len([a for a in attendances if a.status == 'present'])}/present, {len([a for a in attendances if a.status == 'absent'])}/absent\n"
+        report += f"Homework: {len([h for h in homeworks if h.status == 'pending'])} pending, {len([h for h in homeworks if h.status == 'submitted'])} submitted"
         
         if cmd.get("pdf"):
             from app.pdf_generator import generate_pdf_report
             date_range_display = date_range.replace("(", "").replace(")", "") if date_range else ""
-            pdf_content = generate_pdf_report(student, grades, behaviors, attendances, avg_grade, date_range_display)
+            pdf_content = generate_pdf_report(student, grades, behaviors, attendances, homeworks, avg_grade, date_range_display)
             return Response(content=pdf_content, media_type="application/pdf", headers={"Content-Disposition": f"attachment; filename=report_{student.name}.pdf"})
         
         return {"success": True, "message": report}
@@ -379,12 +398,14 @@ def generate_pdf(student_name: str, date_from: str = None, date_to: str = None, 
     grades = student.grades
     behaviors = student.behaviors
     attendances = student.attendances
+    homeworks = student.homeworks
     
     if date_from:
         from_date = datetime.strptime(date_from, "%Y-%m-%d")
         grades = [g for g in grades if g.created_at >= from_date]
         behaviors = [b for b in behaviors if b.created_at >= from_date]
         attendances = [a for a in attendances if a.date >= from_date]
+        homeworks = [h for h in homeworks if h.created_at >= from_date]
     
     if date_to:
         to_date = datetime.strptime(date_to, "%Y-%m-%d")
@@ -392,6 +413,7 @@ def generate_pdf(student_name: str, date_from: str = None, date_to: str = None, 
         grades = [g for g in grades if g.created_at < to_date]
         behaviors = [b for b in behaviors if b.created_at < to_date]
         attendances = [a for a in attendances if a.date < to_date]
+        homeworks = [h for h in homeworks if h.created_at < to_date]
     
     avg_grade = sum(g.score for g in grades) / len(grades) if grades else 0
     
@@ -403,7 +425,7 @@ def generate_pdf(student_name: str, date_from: str = None, date_to: str = None, 
     elif date_to:
         date_range = f"to {date_to}"
     
-    pdf_content = generate_pdf_report(student, grades, behaviors, attendances, avg_grade, date_range)
+    pdf_content = generate_pdf_report(student, grades, behaviors, attendances, homeworks, avg_grade, date_range)
     
     return Response(content=pdf_content, media_type="application/pdf", headers={"Content-Disposition": f"attachment; filename=report_{student_name}.pdf"})
 

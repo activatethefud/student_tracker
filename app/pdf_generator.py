@@ -2,7 +2,7 @@ from weasyprint import HTML
 from datetime import datetime
 
 
-def generate_pdf_report(student, grades, behaviors, attendances, avg_grade, date_range=""):
+def generate_pdf_report(student, grades, behaviors, attendances, homeworks, avg_grade, date_range=""):
     grades_html = ""
     for g in grades:
         grades_html += f"<tr><td>{g.subject}</td><td>{g.score}</td><td>{g.created_at.strftime('%Y-%m-%d %H:%M')}</td></tr>"
@@ -16,6 +16,20 @@ def generate_pdf_report(student, grades, behaviors, attendances, avg_grade, date
     
     if not behaviors_html:
         behaviors_html = "<tr><td colspan='3'>No behaviors recorded</td></tr>"
+    
+    homework_html = ""
+    pending_count = 0
+    submitted_count = 0
+    for h in homeworks:
+        due_str = f", Due: {h.due_date.strftime('%Y-%m-%d')}" if h.due_date else ""
+        homework_html += f"<tr><td>{h.title}</td><td>{h.status}</td><td>{h.created_at.strftime('%Y-%m-%d')}{due_str}</td></tr>"
+        if h.status == "pending":
+            pending_count += 1
+        else:
+            submitted_count += 1
+    
+    if not homework_html:
+        homework_html = "<tr><td colspan='3'>No homework assigned</td></tr>"
     
     present = len([a for a in attendances if a.status == 'present'])
     absent = len([a for a in attendances if a.status == 'absent'])
@@ -50,6 +64,7 @@ def generate_pdf_report(student, grades, behaviors, attendances, avg_grade, date
             <div class="summary-item"><span class="label">Total Grades:</span> {len(grades)}</div>
             <div class="summary-item"><span class="label">Total Behaviors:</span> {len(behaviors)}</div>
             <div class="summary-item"><span class="label">Attendance:</span> {present} present, {absent} absent, {late} late (out of {total})</div>
+            <div class="summary-item"><span class="label">Homework:</span> {pending_count} pending, {submitted_count} submitted (out of {len(homeworks)})</div>
             {f'<div class="summary-item"><span class="label">Details:</span> {student.details}</div>' if student.details else ''}
         </div>
         
@@ -71,6 +86,12 @@ def generate_pdf_report(student, grades, behaviors, attendances, avg_grade, date
             <tbody>
                 {''.join(f"<tr><td>{a.status}</td><td>{a.date.strftime('%Y-%m-%d')}</td></tr>" for a in attendances) if attendances else '<tr><td colspan="2">No attendance records</td></tr>'}
             </tbody>
+        </table>
+        
+        <h2>Homework</h2>
+        <table>
+            <thead><tr><th>Title</th><th>Status</th><th>Assigned/Due</th></tr></thead>
+            <tbody>{homework_html}</tbody>
         </table>
         
         <div class="footer">
