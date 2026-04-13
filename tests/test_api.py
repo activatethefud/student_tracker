@@ -43,6 +43,13 @@ def client():
 
 
 @pytest.fixture
+def auth_headers(client, admin_user):
+    login = client.post("/token", data={"username": "admin", "password": "test"})
+    token = login.json()["access_token"]
+    return {"Authorization": f"Bearer {token}"}
+
+
+@pytest.fixture
 def db():
     db = TestingSessionLocal()
     yield db
@@ -273,3 +280,45 @@ class TestInitAdmin:
         assert response.status_code == 200
         data = response.json()
         assert data["success"] is False
+
+
+class TestAutocomplete:
+    def test_autocomplete_commands(self, client, admin_user, auth_headers):
+        response = client.get("/api/autocomplete?prefix=/", headers=auth_headers)
+        assert response.status_code == 200
+        data = response.json()
+        suggestions = [s["value"] for s in data["suggestions"]]
+        assert "/add-student" in suggestions
+        assert "/grade" in suggestions
+        assert "/behavior" in suggestions
+    
+    def test_autocomplete_students(self, client, admin_user, student, auth_headers):
+        response = client.get("/api/autocomplete?prefix=Jo", headers=auth_headers)
+        assert response.status_code == 200
+        data = response.json()
+        suggestions = [s["value"] for s in data["suggestions"]]
+        assert "John" in suggestions
+    
+    def test_autocomplete_subjects(self, client, admin_user, auth_headers):
+        response = client.get("/api/autocomplete?prefix=Mat", headers=auth_headers)
+        assert response.status_code == 200
+        data = response.json()
+        suggestions = [s["value"] for s in data["suggestions"]]
+        assert "Math" in suggestions
+    
+    def test_autocomplete_behavior_types(self, client, admin_user, auth_headers):
+        response = client.get("/api/autocomplete?prefix=pos", headers=auth_headers)
+        assert response.status_code == 200
+        data = response.json()
+        suggestions = [s["value"] for s in data["suggestions"]]
+        assert "positive" in suggestions
+    
+    def test_autocomplete_empty_prefix(self, client, admin_user, auth_headers):
+        response = client.get("/api/autocomplete?prefix=", headers=auth_headers)
+        assert response.status_code == 200
+        data = response.json()
+        assert data["suggestions"] == []
+    
+    def test_autocomplete_unauthorized(self, client):
+        response = client.get("/api/autocomplete?prefix=/")
+        assert response.status_code == 401
