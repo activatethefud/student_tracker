@@ -46,6 +46,12 @@
                     </div>
                 </form>
                 <div id="login-error" class="text-red-500 text-sm mt-2 hidden"></div>
+                <div id="reset-section" class="hidden mt-4 p-3 bg-yellow-50 border border-yellow-200 rounded">
+                    <p class="text-sm text-yellow-800 font-medium">Account Locked</p>
+                    <p class="text-xs text-yellow-600 mb-2">Enter master password to reset admin</p>
+                    <input type="password" id="master-password" class="w-full border rounded px-3 py-2 text-sm" placeholder="Master password">
+                    <button onclick="resetWithMaster()" class="mt-2 w-full bg-yellow-500 text-white py-1 rounded hover:bg-yellow-600 text-sm">Reset Admin</button>
+                </div>
             </div>
         </div>
         
@@ -88,11 +94,17 @@
         
         function showLogin() {
             document.getElementById('login-modal').classList.remove('hidden');
+            document.getElementById('login-error').classList.add('hidden');
+            document.getElementById('reset-section').classList.add('hidden');
+            document.getElementById('login-username').value = '';
+            document.getElementById('login-password').value = '';
+            document.getElementById('master-password').value = '';
         }
         
         function hideLogin() {
             document.getElementById('login-modal').classList.add('hidden');
             document.getElementById('login-error').classList.add('hidden');
+            document.getElementById('reset-section').classList.add('hidden');
         }
         
         document.getElementById('login-form').addEventListener('submit', async (e) => {
@@ -110,27 +122,74 @@
                     body: formData
                 });
                 
+                const data = await response.json();
+                
                 if (response.ok) {
-                    const data = await response.json();
                     authToken = data.access_token;
                     localStorage.setItem('student_tracker_token', authToken);
                     hideLogin();
                     document.getElementById('auth-section').innerHTML = 
                         '<span class="text-green-600">Logged in as ' + username + '</span> <button onclick="logout()" class="ml-2 text-red-500 hover:underline">Logout</button>';
+                    addMessage('Logged in successfully!', false);
+                } else if (response.status === 423) {
+                    document.getElementById('login-error').textContent = data.detail;
+                    document.getElementById('login-error').classList.remove('hidden');
+                    document.getElementById('reset-section').classList.remove('hidden');
+                    document.getElementById('master-password').focus();
                 } else {
-                    document.getElementById('login-error').textContent = 'Invalid username or password';
+                    document.getElementById('login-error').textContent = data.detail || 'Login failed';
                     document.getElementById('login-error').classList.remove('hidden');
                 }
             } catch (err) {
-                document.getElementById('login-error').textContent = 'Login failed';
+                document.getElementById('login-error').textContent = 'Login failed: ' + err.message;
                 document.getElementById('login-error').classList.remove('hidden');
             }
         });
         
+        async function resetWithMaster() {
+            const username = document.getElementById('login-username').value;
+            const masterPassword = document.getElementById('master-password').value;
+            
+            if (!masterPassword) {
+                document.getElementById('login-error').textContent = 'Please enter master password';
+                document.getElementById('login-error').classList.remove('hidden');
+                return;
+            }
+            
+            const formData = new FormData();
+            formData.append('username', username);
+            formData.append('password', masterPassword);
+            
+            try {
+                const response = await fetch('/token', {
+                    method: 'POST',
+                    body: formData
+                });
+                
+                const data = await response.json();
+                
+                if (response.ok) {
+                    authToken = data.access_token;
+                    localStorage.setItem('student_tracker_token', authToken);
+                    hideLogin();
+                    document.getElementById('auth-section').innerHTML = 
+                        '<span class="text-green-600">Logged in as admin</span> <button onclick="logout()" class="ml-2 text-red-500 hover:underline">Logout</button>';
+                    addMessage(data.message || 'Admin reset to default (admin/admin123)', false);
+                } else {
+                    document.getElementById('login-error').textContent = data.detail || 'Reset failed';
+                    document.getElementById('login-error').classList.remove('hidden');
+                }
+            } catch (err) {
+                document.getElementById('login-error').textContent = 'Reset failed: ' + err.message;
+                document.getElementById('login-error').classList.remove('hidden');
+            }
+        }
+        
         function logout() {
             authToken = null;
             localStorage.removeItem('student_tracker_token');
-            location.reload();
+            document.getElementById('auth-section').innerHTML = '<button onclick="showLogin()" class="text-blue-500 hover:underline">Login</button>';
+            addMessage('Logged out.', false);
         }
         
         if (authToken) {
@@ -183,6 +242,10 @@
         
         document.getElementById('command-input').addEventListener('keypress', (e) => {
             if (e.key === 'Enter') sendCommand();
+        });
+        
+        document.getElementById('master-password').addEventListener('keypress', (e) => {
+            if (e.key === 'Enter') resetWithMaster();
         });
     </script>
 </body>
