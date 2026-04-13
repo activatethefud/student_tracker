@@ -133,15 +133,17 @@ def startup():
     db = get_session(engine)
     try:
         # Add new columns if they don't exist (for existing databases)
+        # Check if column exists before trying to add
         try:
-            db.execute("ALTER TABLE students ADD COLUMN student_id VARCHAR(20)")
-        except:
-            pass
-        try:
-            db.execute("ALTER TABLE students ADD COLUMN year VARCHAR(50)")
-        except:
-            pass
-        db.commit()
+            result = db.execute("PRAGMA table_info(students)")
+            columns = [row[1] for row in result]
+            if 'student_id' not in columns:
+                db.execute("ALTER TABLE students ADD COLUMN student_id VARCHAR(20)")
+            if 'year' not in columns:
+                db.execute("ALTER TABLE students ADD COLUMN year VARCHAR(50)")
+            db.commit()
+        except Exception as e:
+            db.rollback()
         assign_missing_student_ids(db)
     finally:
         db.close()
