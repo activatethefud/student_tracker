@@ -4,7 +4,9 @@ A real-time student tracking application for recording grades, behavior, and att
 
 ## Features
 
-- **Slash Commands** - Quick data entry: `/grade`, `/behavior`, `/attendance`, `/report`
+- **Slash Commands** - Quick data entry: `/grade`, `/behavior`, `/attendance`, `/homework`, `/report`
+- **Homework Tracking** - Track assignments with due dates and status (pending/submitted)
+- **Autocomplete** - Smart suggestions for commands, student names, subjects, and options
 - **Date/Time Support** - Add historical records with `--date YYYY-MM-DD`
 - **PDF Reports** - Generate downloadable PDF reports with `--pdf`
 - **Chat UI** - Simple, fast, mobile-friendly interface with login
@@ -64,6 +66,9 @@ docker compose up --build
 | `/behavior John positive --date 2024-03-20` | Behavior with custom date |
 | `/attendance <name> <status>` | `/attendance John present` | Mark attendance |
 | `/attendance John late --date 2024-03-10` | Attendance with custom date |
+| `/homework <name> <title>` | `/homework John "Read chapter 5"` | Add homework |
+| `/homework John "Math hw" --due 2024-04-15` | Homework with due date |
+| `/homework John "Essay" --status submitted` | Mark homework as submitted |
 | `/report <name>` | `/report John` | Get student report |
 | `/report John --from 2024-01-01 --to 2024-12-31` | Report with date range |
 | `/report John --pdf` | Download PDF report |
@@ -86,6 +91,7 @@ docker compose up --build
 | POST | `/api/init-admin` | Initialize admin user |
 | POST | `/api/command` | Execute slash command (auth required) |
 | GET | `/api/students` | List students (auth required) |
+| GET | `/api/autocomplete` | Autocomplete suggestions (auth required) |
 | GET | `/api/students/{name}/report` | Get JSON report |
 | POST | `/api/students/{name}/report/pdf` | Download PDF report |
 
