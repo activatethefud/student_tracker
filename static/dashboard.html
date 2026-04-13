@@ -510,7 +510,13 @@
                 });
                 
                 if (response.ok) {
-                    location.reload();
+                    const data = await response.json();
+                    if (type === 'student' && data.message && data.message.includes('Updated student')) {
+                        const newName = document.getElementById('edit-name').value;
+                        window.location.href = '/student/' + encodeURIComponent(newName);
+                    } else {
+                        location.reload();
+                    }
                 } else {
                     alert('Failed to update');
                 }
