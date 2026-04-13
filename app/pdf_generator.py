@@ -307,22 +307,10 @@ def generate_pdf_report(student, grades, behaviors, attendances, homeworks, acti
         </div>
 
         <div class="summary-row">
-            <div class="summary-card card-blue">
-                <div class="value">{avg_grade_val:.1f}</div>
-                <div class="label">Average Grade</div>
-            </div>
-            <div class="summary-card card-green">
-                <div class="value">{attendance_pct}%</div>
-                <div class="label">Attendance Rate</div>
-            </div>
-            <div class="summary-card card-yellow">
-                <div class="value">{pending_hw}</div>
-                <div class="label">Pending HW</div>
-            </div>
-            <div class="summary-card card-purple">
-                <div class="value">{behavior_pct}%</div>
-                <div class="label">Positive Behavior</div>
-            </div>
+            {f'<div class="summary-card card-blue"><div class="value">{avg_grade_val:.1f}</div><div class="label">Average Grade</div></div>' if grades else ''}
+            {f'<div class="summary-card card-green"><div class="value">{attendance_pct}%</div><div class="label">Attendance Rate</div></div>' if total_attendance > 0 else ''}
+            {f'<div class="summary-card card-yellow"><div class="value">{pending_hw}</div><div class="label">Pending HW</div></div>' if homeworks else ''}
+            {f'<div class="summary-card card-purple"><div class="value">{behavior_pct}%</div><div class="label">Positive Behavior</div></div>' if total_behaviors > 0 else ''}
         </div>
 
         {charts_html}
