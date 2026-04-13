@@ -133,18 +133,23 @@ def startup():
     db = get_session(engine)
     try:
         # Add new columns if they don't exist (for existing databases)
-        # Check if column exists before trying to add
+        from sqlalchemy import text
         try:
-            result = db.execute("PRAGMA table_info(students)")
-            columns = [row[1] for row in result]
+            result = db.execute(text("PRAGMA table_info(students)"))
+            columns = [row[1] for row in result.fetchall()]
             if 'student_id' not in columns:
-                db.execute("ALTER TABLE students ADD COLUMN student_id VARCHAR(20)")
+                db.execute(text("ALTER TABLE students ADD COLUMN student_id VARCHAR(20)"))
             if 'year' not in columns:
-                db.execute("ALTER TABLE students ADD COLUMN year VARCHAR(50)")
+                db.execute(text("ALTER TABLE students ADD COLUMN year VARCHAR(50)"))
             db.commit()
         except Exception as e:
             db.rollback()
-        assign_missing_student_ids(db)
+        
+        # Try to assign IDs - will fail gracefully if columns don't exist
+        try:
+            assign_missing_student_ids(db)
+        except Exception:
+            pass  # Skip if columns don't exist yet
     finally:
         db.close()
 

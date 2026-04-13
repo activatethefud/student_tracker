@@ -35,11 +35,15 @@ def generate_student_id(session):
 
 def assign_missing_student_ids(session):
     """Assign student IDs to students who don't have one."""
-    students_without_id = session.query(Student).filter(Student.student_id == None).order_by(Student.id).all()
-    for student in students_without_id:
-        student.student_id = generate_student_id(session)
-    if students_without_id:
-        session.commit()
+    try:
+        students_without_id = session.query(Student).filter(Student.student_id == None).order_by(Student.id).all()
+        for student in students_without_id:
+            student.student_id = generate_student_id(session)
+        if students_without_id:
+            session.commit()
+    except Exception:
+        # Column might not exist yet - skip assignment
+        pass
 
 
 class Grade(Base):
