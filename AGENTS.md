@@ -12,6 +12,20 @@ Student tracker app: records grades, behavior, attendance via slash commands in 
 - **PDF**: WeasyPrint
 - **Deployment**: Docker
 
+## Architecture
+
+See [ARCHITECTURE.md](./ARCHITECTURE.md) for complete file dependency chain and how to update when adding new features.
+
+### Quick Reference: What to Update
+
+| Feature Type | Files to Update |
+|--------------|-----------------|
+| New slash command | `app/commands.py`, `app/main.py`, `static/index.html`, `tests/test_commands.py` |
+| New API endpoint | `app/main.py`, `tests/test_api.py` |
+| New page/template | `app/main.py`, `static/new.html`, `tests/test_frontend.py` |
+| New data model | `app/models.py`, `app/main.py`, `app/pdf_generator.py`, `tests/test_api.py` |
+| Frontend UI changes | `static/*.html`, `tests/test_frontend.py` |
+
 ## Developer Commands
 
 ```bash
