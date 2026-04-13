@@ -29,10 +29,14 @@
             </form>
             <div id="login-error" class="text-red-500 text-sm mt-2 hidden"></div>
             <div id="reset-section" class="hidden mt-3 sm:mt-4 p-3 bg-yellow-50 border border-yellow-200 rounded">
-                <p class="text-sm text-yellow-800 font-medium">Account Locked</p>
-                <p class="text-xs text-yellow-600 mb-2">Enter master password to reset admin</p>
-                <input type="password" id="master-password" class="w-full border rounded px-3 py-2 text-sm" placeholder="Master password">
-                <button onclick="resetWithMaster()" class="mt-2 w-full bg-yellow-500 text-white py-1 rounded hover:bg-yellow-600 text-sm">Reset Admin</button>
+                <p class="text-sm text-yellow-800 font-medium">Account Locked / Forgot Password</p>
+                <p class="text-xs text-yellow-600 mb-2">Enter new credentials and master password to reset</p>
+                <div class="space-y-2">
+                    <input type="text" id="reset-username" class="w-full border rounded px-3 py-2 text-sm" placeholder="New username">
+                    <input type="password" id="reset-password" class="w-full border rounded px-3 py-2 text-sm" placeholder="New password (min 6 chars)">
+                    <input type="password" id="master-password" class="w-full border rounded px-3 py-2 text-sm" placeholder="Master password">
+                </div>
+                <button onclick="resetWithMaster()" class="mt-2 w-full bg-yellow-500 text-white py-1 rounded hover:bg-yellow-600 text-sm">Reset & Login</button>
             </div>
         </div>
     </div>
@@ -80,6 +84,8 @@
             document.getElementById('reset-section').classList.add('hidden');
             document.getElementById('login-username').value = '';
             document.getElementById('login-password').value = '';
+            document.getElementById('reset-username').value = '';
+            document.getElementById('reset-password').value = '';
             document.getElementById('master-password').value = '';
         }
         
@@ -128,9 +134,21 @@
         });
         
         async function resetWithMaster() {
-            const username = document.getElementById('login-username').value;
-            const password = document.getElementById('login-password').value || 'resetpassword';
+            const username = document.getElementById('reset-username').value;
+            const password = document.getElementById('reset-password').value;
             const masterPassword = document.getElementById('master-password').value;
+            
+            if (!username || !password) {
+                document.getElementById('login-error').textContent = 'Please enter new username and password';
+                document.getElementById('login-error').classList.remove('hidden');
+                return;
+            }
+            
+            if (password.length < 6) {
+                document.getElementById('login-error').textContent = 'Password must be at least 6 characters';
+                document.getElementById('login-error').classList.remove('hidden');
+                return;
+            }
             
             try {
                 const response = await fetch('/api/reset-admin', {
