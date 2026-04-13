@@ -57,13 +57,14 @@
         
         <div id="chat-box" class="chat-container border rounded p-4 mb-4 space-y-2">
             <div class="message-system p-3 rounded-lg">
-                Welcome! Type a command to get started. Examples:
+                Welcome! Type a command or use quick buttons below. Examples:
                 <ul class="list-disc ml-5 mt-2">
                     <li><code>/add-student John</code> - Add a student</li>
                     <li><code>/grade John 90 --subject Math</code> - Add a grade</li>
                     <li><code>/behavior John positive --note "Helped peer"</code> - Record behavior</li>
                     <li><code>/attendance John present</code> - Mark attendance</li>
                     <li><code>/report John</code> - Get student report</li>
+                    <li><code>/report John --pdf</code> - Download PDF report</li>
                 </ul>
             </div>
         </div>
@@ -81,11 +82,14 @@
         
         <div class="mt-4 p-3 bg-gray-100 rounded text-sm">
             <strong>Quick Reference:</strong>
-            <code>/add-student &lt;name&gt;</code> |
-            <code>/grade &lt;name&gt; &lt;score&gt;</code> |
-            <code>/behavior &lt;name&gt; &lt;type&gt;</code> |
-            <code>/attendance &lt;name&gt; &lt;status&gt;</code> |
-            <code>/report &lt;name&gt;</code>
+            <div class="mt-2 flex flex-wrap gap-2">
+                <button onclick="quickCommand('/add-student ')" class="text-xs bg-white px-2 py-1 rounded border hover:bg-gray-50">/add-student</button>
+                <button onclick="quickCommand('/grade ')" class="text-xs bg-white px-2 py-1 rounded border hover:bg-gray-50">/grade</button>
+                <button onclick="quickCommand('/behavior ')" class="text-xs bg-white px-2 py-1 rounded border hover:bg-gray-50">/behavior</button>
+                <button onclick="quickCommand('/attendance ')" class="text-xs bg-white px-2 py-1 rounded border hover:bg-gray-50">/attendance</button>
+                <button onclick="quickCommand('/report ')" class="text-xs bg-white px-2 py-1 rounded border hover:bg-gray-50">/report</button>
+                <button onclick="quickCommand('/report --pdf ')" class="text-xs bg-red-100 px-2 py-1 rounded border border-red-300 hover:bg-red-200">/report --pdf</button>
+            </div>
         </div>
     </div>
 
@@ -236,6 +240,21 @@
                 return;
             }
             
+            if (response.headers.get('content-type') === 'application/pdf') {
+                const blob = await response.blob();
+                const url = window.URL.createObjectURL(blob);
+                const a = document.createElement('a');
+                a.href = url;
+                const filename = command.match(/\/report\s+(\S+)/) ? `report_${RegExp.$1}.pdf` : 'report.pdf';
+                a.download = filename;
+                document.body.appendChild(a);
+                a.click();
+                window.URL.revokeObjectURL(url);
+                a.remove();
+                addMessage('PDF report downloaded!', false);
+                return;
+            }
+            
             const data = await response.json();
             addMessage(data.message || data.error || 'Unknown response');
         }
@@ -247,6 +266,12 @@
         document.getElementById('master-password').addEventListener('keypress', (e) => {
             if (e.key === 'Enter') resetWithMaster();
         });
+        
+        function quickCommand(cmd) {
+            const input = document.getElementById('command-input');
+            input.value = cmd;
+            input.focus();
+        }
     </script>
 </body>
 </html>
