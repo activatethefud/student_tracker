@@ -280,3 +280,78 @@ class TestInitAdmin:
         assert response.status_code == 200
         data = response.json()
         assert data["success"] is False
+
+
+class TestHomeworkAPI:
+    def test_homework_command_adds_homework(self, client, admin_user, student):
+        login = client.post("/token", data={"username": "admin", "password": "test"})
+        token = login.json()["access_token"]
+        
+        response = client.post(
+            "/api/command",
+            json={"command": '/homework John "Read chapter 5"'},
+            headers={"Authorization": f"Bearer {token}"}
+        )
+        assert response.status_code == 200
+        data = response.json()
+        assert data["success"] is True
+        assert "Read chapter 5" in data["message"]
+    
+    def test_homework_command_with_due_date(self, client, admin_user, student):
+        login = client.post("/token", data={"username": "admin", "password": "test"})
+        token = login.json()["access_token"]
+        
+        response = client.post(
+            "/api/command",
+            json={"command": '/homework John "Math worksheet" --due 2024-04-15'},
+            headers={"Authorization": f"Bearer {token}"}
+        )
+        assert response.status_code == 200
+        data = response.json()
+        assert data["success"] is True
+        assert "2024-04-15" in data["message"]
+    
+    def test_homework_command_with_custom_status(self, client, admin_user, student):
+        login = client.post("/token", data={"username": "admin", "password": "test"})
+        token = login.json()["access_token"]
+        
+        response = client.post(
+            "/api/command",
+            json={"command": '/homework John "Essay" --status "in progress"'},
+            headers={"Authorization": f"Bearer {token}"}
+        )
+        assert response.status_code == 200
+        data = response.json()
+        assert data["success"] is True
+        assert "in progress" in data["message"]
+    
+    def test_homework_command_student_not_found(self, client, admin_user):
+        login = client.post("/token", data={"username": "admin", "password": "test"})
+        token = login.json()["access_token"]
+        
+        response = client.post(
+            "/api/command",
+            json={"command": '/homework NonExistent "Test"'},
+            headers={"Authorization": f"Bearer {token}"}
+        )
+        assert response.status_code == 200
+        data = response.json()
+        assert data["success"] is False
+    
+    def test_homework_included_in_report(self, client, admin_user, student):
+        login = client.post("/token", data={"username": "admin", "password": "test"})
+        token = login.json()["access_token"]
+        
+        client.post(
+            "/api/command",
+            json={"command": '/homework John "Test homework"'},
+            headers={"Authorization": f"Bearer {token}"}
+        )
+        
+        response = client.post(
+            "/api/command",
+            json={"command": "/report John"},
+            headers={"Authorization": f"Bearer {token}"}
+        )
+        data = response.json()
+        assert "Homework" in data["message"]

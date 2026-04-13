@@ -176,3 +176,22 @@ class TestParseCommand:
         result = parse_command('/homework John "Test" --status "in progress"')
         assert result["action"] == "add_homework"
         assert result["status"] == "in progress"
+    
+    def test_homework_title_with_quotes(self):
+        result = parse_command('/homework John "Chapter 5: Pages 1-10"')
+        assert result["action"] == "add_homework"
+        assert result["title"] == "Chapter 5: Pages 1-10"
+    
+    def test_homework_no_title(self):
+        result = parse_command("/homework John")
+        assert result["action"] == "error"
+    
+    def test_homework_by_alias(self):
+        result = parse_command('/homework John "Test" --by 2024-12-01')
+        assert result["action"] == "add_homework"
+        assert result["due_date"] == "2024-12-01"
+    
+    def test_homework_default_status_when_explicit(self):
+        result = parse_command('/homework John "Test" --status')
+        assert result["action"] == "add_homework"
+        assert result["status"] == "pending"
