@@ -365,7 +365,7 @@ def execute_command(request: CommandRequest, db: Session = Depends(get_db), curr
         report += f"Grades: {', '.join(f'{g.score} ({g.subject})' for g in grades) or 'None'}\n"
         report += f"Behaviors: {', '.join(f'{b.behavior_type}' for b in behaviors) or 'None'}\n"
         report += f"Attendance: {len([a for a in attendances if a.status == 'present'])}/present, {len([a for a in attendances if a.status == 'absent'])}/absent\n"
-        report += f"Homework: {len([h for h in homeworks if h.status == 'pending'])} pending, {len([h for h in homeworks if h.status == 'submitted'])} submitted"
+        report += f"Homework: {len([h for h in homeworks if h.status.lower() == 'pending'])} pending, {len([h for h in homeworks if h.status.lower() == 'submitted'])} submitted, {len([h for h in homeworks if h.status.lower() not in ['pending', 'submitted']])} other"
         
         if cmd.get("pdf"):
             from app.pdf_generator import generate_pdf_report

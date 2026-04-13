@@ -20,13 +20,16 @@ def generate_pdf_report(student, grades, behaviors, attendances, homeworks, avg_
     homework_html = ""
     pending_count = 0
     submitted_count = 0
+    other_count = 0
     for h in homeworks:
         due_str = f", Due: {h.due_date.strftime('%Y-%m-%d')}" if h.due_date else ""
         homework_html += f"<tr><td>{h.title}</td><td>{h.status}</td><td>{h.created_at.strftime('%Y-%m-%d')}{due_str}</td></tr>"
-        if h.status == "pending":
+        if h.status.lower() == "pending":
             pending_count += 1
-        else:
+        elif h.status.lower() == "submitted":
             submitted_count += 1
+        else:
+            other_count += 1
     
     if not homework_html:
         homework_html = "<tr><td colspan='3'>No homework assigned</td></tr>"
@@ -64,7 +67,7 @@ def generate_pdf_report(student, grades, behaviors, attendances, homeworks, avg_
             <div class="summary-item"><span class="label">Total Grades:</span> {len(grades)}</div>
             <div class="summary-item"><span class="label">Total Behaviors:</span> {len(behaviors)}</div>
             <div class="summary-item"><span class="label">Attendance:</span> {present} present, {absent} absent, {late} late (out of {total})</div>
-            <div class="summary-item"><span class="label">Homework:</span> {pending_count} pending, {submitted_count} submitted (out of {len(homeworks)})</div>
+            <div class="summary-item"><span class="label">Homework:</span> {pending_count} pending, {submitted_count} submitted, {other_count} other (out of {len(homeworks)})</div>
             {f'<div class="summary-item"><span class="label">Details:</span> {student.details}</div>' if student.details else ''}
         </div>
         
