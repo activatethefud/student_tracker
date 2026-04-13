@@ -133,6 +133,28 @@ def parse_command(command: str) -> dict:
         
         return {"action": "add_homework", "student_name": student_name, "title": title, "due_date": due_date, "status": status}
     
+    if cmd == "activity":
+        if len(args) < 3:
+            return {"action": "error", "message": "Usage: /activity <name> <type> <status> [--date YYYY-MM-DD]"}
+        student_name = args[0]
+        activity_type = args[1].lower()
+        status = args[2].lower()
+        date_str = None
+        
+        valid_types = ["taking-notes", "participation"]
+        valid_statuses = ["yes", "no"]
+        
+        if activity_type not in valid_types:
+            return {"action": "error", "message": f"Invalid type. Use: {', '.join(valid_types)}"}
+        if status not in valid_statuses:
+            return {"action": "error", "message": f"Invalid status. Use: yes or no"}
+        
+        for i, arg in enumerate(args):
+            if arg in ("--date", "--at") and i + 1 < len(args):
+                date_str = args[i + 1]
+        
+        return {"action": "add_activity", "student_name": student_name, "activity_type": activity_type, "status": status, "date": date_str}
+    
     if cmd in ("report", "stats"):
         if len(args) < 1:
             return {"action": "error", "message": "Usage: /report <name> [--from YYYY-MM-DD] [--to YYYY-MM-DD] [--pdf]"}
@@ -163,6 +185,7 @@ def parse_command(command: str) -> dict:
 /behavior <name> <type> [--note "note"] [--date YYYY-MM-DD] - Record behavior (positive/negative/neutral)
 /attendance <name> present|absent|late [--date YYYY-MM-DD] - Mark attendance
 /homework <name> <title> [--due YYYY-MM-DD] [--status <status>] - Add homework
+/activity <name> <type> <status> [--date YYYY-MM-DD] - Record activity (type: taking-notes, participation; status: yes/no)
 /report <name> [--from YYYY-MM-DD] [--to YYYY-MM-DD] [--pdf] - Get student report (use name or ID)
 /dashboard <name> - Open student dashboard (use name or ID)
 /dashboard - List all students

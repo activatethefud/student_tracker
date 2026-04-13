@@ -10,7 +10,7 @@ import bcrypt
 from jose import JWTError, jwt
 from pydantic import BaseModel
 
-from app.models import Base, get_engine, get_session, Student, Grade, Behavior, Attendance, Homework, User, generate_student_id, assign_missing_student_ids
+from app.models import Base, get_engine, get_session, Student, Grade, Behavior, Attendance, Homework, Activity, User, generate_student_id, assign_missing_student_ids
 from app.config import settings
 from app.commands import parse_command
 
@@ -125,6 +125,12 @@ class BehaviorCreate(BaseModel):
 class AttendanceCreate(BaseModel):
     student_name: str
     status: str
+
+
+class ActivityCreate(BaseModel):
+    student_name: str
+    activity_type: str  # taking-notes, participation
+    status: str  # yes, no
 
 
 @app.on_event("startup")
@@ -258,6 +264,17 @@ def mark_attendance(attendance: AttendanceCreate, db: Session = Depends(get_db),
     return {"success": True, "message": f"Marked {attendance.student_name} as {attendance.status}"}
 
 
+@app.post("/api/activities")
+def add_activity(activity: ActivityCreate, db: Session = Depends(get_db), current_user: User = Depends(get_current_user)):
+    student = db.query(Student).filter(Student.name == activity.student_name).first()
+    if not student:
+        return {"success": False, "message": f"Student '{activity.student_name}' not found. Use /add-student first."}
+    new_activity = Activity(student_id=student.id, activity_type=activity.activity_type, status=activity.status)
+    db.add(new_activity)
+    db.commit()
+    return {"success": True, "message": f"Recorded {activity.activity_type}: {activity.status} for {activity.student_name}"}
+
+
 @app.get("/api/students/{student_name}/report")
 def get_student_report(student_name: str, db: Session = Depends(get_db), current_user: User = Depends(get_current_user)):
     student = db.query(Student).filter(Student.name == student_name).first()
@@ -267,6 +284,7 @@ def get_student_report(student_name: str, db: Session = Depends(get_db), current
     grades = [{"score": g.score, "subject": g.subject, "date": g.created_at.isoformat()} for g in student.grades]
     behaviors = [{"note": b.note, "type": b.behavior_type, "date": b.created_at.isoformat()} for b in student.behaviors]
     attendances = [{"status": a.status, "date": a.date.isoformat()} for a in student.attendances]
+    activities = [{"activity_type": a.activity_type, "status": a.status, "date": a.date.isoformat()} for a in student.activities]
     
     avg_grade = sum(g["score"] for g in grades) / len(grades) if grades else 0
     
@@ -276,6 +294,7 @@ def get_student_report(student_name: str, db: Session = Depends(get_db), current
         "grades": grades,
         "behaviors": behaviors,
         "attendance": attendances,
+        "activities": activities,
         "average_grade": round(avg_grade, 2)
     }
 
@@ -296,6 +315,7 @@ def student_dashboard(student_name: str, db: Session = Depends(get_db)):
     behaviors = student.behaviors
     attendances = student.attendances
     homeworks = student.homeworks
+    activities = student.activities
     
     avg_grade = sum(g.score for g in grades) / len(grades) if grades else 0
     present = len([a for a in attendances if a.status == "present"])
@@ -313,6 +333,7 @@ def student_dashboard(student_name: str, db: Session = Depends(get_db)):
         "behaviors": behaviors,
         "attendances": attendances,
         "homeworks": homeworks,
+        "activities": activities,
         "avg_grade": round(avg_grade, 2),
         "attendance_pct": attendance_pct,
         "pending_hw": pending_hw,
@@ -446,6 +467,43 @@ def delete_homework(homework_id: int, db: Session = Depends(get_db), current_use
     db.delete(homework)
     db.commit()
     return {"success": True, "message": f"Deleted homework {homework_id}"}
+
+
+class ActivityUpdate(BaseModel):
+    activity_type: Optional[str] = None
+    status: Optional[str] = None
+    date: Optional[str] = None
+
+
+@app.put("/api/activities/{activity_id}")
+def update_activity(activity_id: int, update: ActivityUpdate, db: Session = Depends(get_db), current_user: User = Depends(get_current_user)):
+    activity = db.query(Activity).filter(Activity.id == activity_id).first()
+    if not activity:
+        raise HTTPException(status_code=404, detail="Activity not found")
+    
+    if update.activity_type is not None:
+        activity.activity_type = update.activity_type
+    if update.status is not None:
+        activity.status = update.status
+    if update.date is not None:
+        try:
+            activity.date = datetime.strptime(update.date, "%Y-%m-%d")
+        except ValueError:
+            pass
+    
+    db.commit()
+    return {"success": True, "message": f"Updated activity {activity_id}"}
+
+
+@app.delete("/api/activities/{activity_id}")
+def delete_activity(activity_id: int, db: Session = Depends(get_db), current_user: User = Depends(get_current_user)):
+    activity = db.query(Activity).filter(Activity.id == activity_id).first()
+    if not activity:
+        raise HTTPException(status_code=404, detail="Activity not found")
+    
+    db.delete(activity)
+    db.commit()
+    return {"success": True, "message": f"Deleted activity {activity_id}"}
 
 
 class StudentUpdate(BaseModel):
@@ -585,6 +643,21 @@ def execute_command(request: CommandRequest, db: Session = Depends(get_db), curr
         due_msg = f", due: {cmd['due_date']}" if cmd.get("due_date") else ""
         return {"success": True, "message": f"Added homework for {cmd['student_name']}: {cmd['title']} (status: {cmd['status']}){due_msg}"}
     
+    if cmd["action"] == "add_activity":
+        student, error = resolve_student(db, cmd["student_name"])
+        if error:
+            return {"success": False, "message": error}
+        new_activity = Activity(student_id=student.id, activity_type=cmd["activity_type"], status=cmd["status"])
+        if cmd.get("date"):
+            try:
+                new_activity.date = datetime.strptime(cmd["date"], "%Y-%m-%d")
+            except ValueError:
+                pass
+        db.add(new_activity)
+        db.commit()
+        date_msg = f" (dated: {cmd['date']})" if cmd.get("date") else ""
+        return {"success": True, "message": f"Recorded {cmd['activity_type']}: {cmd['status']} for {cmd['student_name']}{date_msg}"}
+    
     if cmd["action"] == "get_report":
         student, error = resolve_student(db, cmd["student_name"])
         if error:
@@ -594,6 +667,7 @@ def execute_command(request: CommandRequest, db: Session = Depends(get_db), curr
         behaviors = student.behaviors
         attendances = student.attendances
         homeworks = student.homeworks
+        activities = student.activities
         
         date_from = cmd.get("date_from")
         date_to = cmd.get("date_to")
@@ -605,6 +679,7 @@ def execute_command(request: CommandRequest, db: Session = Depends(get_db), curr
                 behaviors = [b for b in behaviors if b.created_at >= from_date]
                 attendances = [a for a in attendances if a.date >= from_date]
                 homeworks = [h for h in homeworks if h.created_at >= from_date]
+                activities = [a for a in activities if a.date >= from_date]
             except ValueError:
                 pass
         
@@ -616,6 +691,7 @@ def execute_command(request: CommandRequest, db: Session = Depends(get_db), curr
                 behaviors = [b for b in behaviors if b.created_at < to_date]
                 attendances = [a for a in attendances if a.date < to_date]
                 homeworks = [h for h in homeworks if h.created_at < to_date]
+                activities = [a for a in activities if a.date < to_date]
             except ValueError:
                 pass
         
@@ -640,12 +716,18 @@ def execute_command(request: CommandRequest, db: Session = Depends(get_db), curr
         report += f"Grades: {', '.join(f'{g.score} ({g.subject})' for g in grades) or 'None'}\n"
         report += f"Behaviors: {', '.join(f'{b.behavior_type}' for b in behaviors) or 'None'}\n"
         report += f"Attendance: {len([a for a in attendances if a.status == 'present'])}/present, {len([a for a in attendances if a.status == 'absent'])}/absent\n"
-        report += f"Homework: {len([h for h in homeworks if h.status.lower() == 'pending'])} pending, {len([h for h in homeworks if h.status.lower() == 'submitted'])} submitted, {len([h for h in homeworks if h.status.lower() not in ['pending', 'submitted']])} other"
+        report += f"Homework: {len([h for h in homeworks if h.status.lower() == 'pending'])} pending, {len([h for h in homeworks if h.status.lower() == 'submitted'])} submitted, {len([h for h in homeworks if h.status.lower() not in ['pending', 'submitted']])} other\n"
+        
+        taking_notes_yes = len([a for a in activities if a.activity_type == "taking-notes" and a.status == "yes"])
+        taking_notes_no = len([a for a in activities if a.activity_type == "taking-notes" and a.status == "no"])
+        participation_yes = len([a for a in activities if a.activity_type == "participation" and a.status == "yes"])
+        participation_no = len([a for a in activities if a.activity_type == "participation" and a.status == "no"])
+        report += f"Activity: Taking Notes - {taking_notes_yes} yes, {taking_notes_no} no; Participation - {participation_yes} yes, {participation_no} no"
         
         if cmd.get("pdf"):
             from app.pdf_generator import generate_pdf_report
             date_range_display = date_range.replace("(", "").replace(")", "") if date_range else ""
-            pdf_content = generate_pdf_report(student, grades, behaviors, attendances, homeworks, avg_grade, date_range_display)
+            pdf_content = generate_pdf_report(student, grades, behaviors, attendances, homeworks, activities, avg_grade, date_range_display)
             return Response(content=pdf_content, media_type="application/pdf", headers={"Content-Disposition": f"attachment; filename=report_{student.name}.pdf"})
         
         return {"success": True, "message": report}

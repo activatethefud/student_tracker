@@ -665,3 +665,85 @@ class TestStudentIDAndYear:
         # Should either work (if exact match by some logic) or show error with options
         # The behavior depends on implementation
         assert data["success"] is True or "Multiple students" in data.get("message", "")
+
+
+class TestActivityAPI:
+    def test_activity_command_adds_activity(self, client, admin_user, student):
+        login = client.post("/token", data={"username": "admin", "password": "test"})
+        token = login.json()["access_token"]
+        
+        response = client.post(
+            "/api/command",
+            json={"command": "/activity John taking-notes yes"},
+            headers={"Authorization": f"Bearer {token}"}
+        )
+        assert response.status_code == 200
+        data = response.json()
+        assert data["success"] is True
+        assert "taking-notes" in data["message"]
+        assert "yes" in data["message"]
+    
+    def test_activity_participation_no(self, client, admin_user, student):
+        login = client.post("/token", data={"username": "admin", "password": "test"})
+        token = login.json()["access_token"]
+        
+        response = client.post(
+            "/api/command",
+            json={"command": "/activity John participation no"},
+            headers={"Authorization": f"Bearer {token}"}
+        )
+        assert response.status_code == 200
+        data = response.json()
+        assert data["success"] is True
+        assert "participation" in data["message"]
+        assert "no" in data["message"]
+    
+    def test_activity_with_date(self, client, admin_user, student):
+        login = client.post("/token", data={"username": "admin", "password": "test"})
+        token = login.json()["access_token"]
+        
+        response = client.post(
+            "/api/command",
+            json={"command": "/activity John taking-notes yes --date 2024-03-20"},
+            headers={"Authorization": f"Bearer {token}"}
+        )
+        assert response.status_code == 200
+        data = response.json()
+        assert data["success"] is True
+        assert "2024-03-20" in data["message"]
+    
+    def test_activity_api_endpoint(self, client, admin_user, student):
+        login = client.post("/token", data={"username": "admin", "password": "test"})
+        token = login.json()["access_token"]
+        
+        response = client.post(
+            "/api/activities",
+            json={"student_name": "John", "activity_type": "taking-notes", "status": "yes"},
+            headers={"Authorization": f"Bearer {token}"}
+        )
+        assert response.status_code == 200
+        data = response.json()
+        assert data["success"] is True
+        assert "taking-notes" in data["message"]
+    
+    def test_activity_cascade_delete(self, client, admin_user, student, db):
+        login = client.post("/token", data={"username": "admin", "password": "test"})
+        token = login.json()["access_token"]
+        
+        # Add activity via command
+        client.post(
+            "/api/command",
+            json={"command": "/activity John taking-notes yes"},
+            headers={"Authorization": f"Bearer {token}"}
+        )
+        
+        from app.models import Activity
+        activities = db.query(Activity).all()
+        assert len(activities) == 1
+        
+        # Delete student - activities should cascade
+        response = client.delete("/api/students/John", headers={"Authorization": f"Bearer {token}"})
+        assert response.status_code == 200
+        
+        activities = db.query(Activity).all()
+        assert len(activities) == 0

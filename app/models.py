@@ -19,6 +19,7 @@ class Student(Base):
     behaviors = relationship("Behavior", back_populates="student", cascade="all, delete-orphan")
     attendances = relationship("Attendance", back_populates="student", cascade="all, delete-orphan")
     homeworks = relationship("Homework", back_populates="student", cascade="all, delete-orphan")
+    activities = relationship("Activity", back_populates="student", cascade="all, delete-orphan")
 
 
 def generate_student_id(session):
@@ -92,6 +93,19 @@ class Homework(Base):
     created_at = Column(DateTime, default=datetime.utcnow)
 
     student = relationship("Student", back_populates="homeworks")
+
+
+class Activity(Base):
+    __tablename__ = "activities"
+
+    id = Column(Integer, primary_key=True)
+    student_id = Column(Integer, ForeignKey("students.id"), nullable=False)
+    activity_type = Column(String(50), nullable=False)  # taking-notes, participation
+    status = Column(String(10), nullable=False)  # yes, no
+    date = Column(DateTime, default=datetime.utcnow)
+    created_at = Column(DateTime, default=datetime.utcnow)
+
+    student = relationship("Student", back_populates="activities")
 
 
 class User(Base):

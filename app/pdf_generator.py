@@ -2,7 +2,7 @@ from weasyprint import HTML
 from datetime import datetime
 
 
-def generate_pdf_report(student, grades, behaviors, attendances, homeworks, avg_grade, date_range=""):
+def generate_pdf_report(student, grades, behaviors, attendances, homeworks, activities, avg_grade, date_range=""):
     grades_html = ""
     for g in grades:
         grades_html += f"<tr><td>{g.subject}</td><td>{g.score}</td><td>{g.created_at.strftime('%Y-%m-%d %H:%M')}</td></tr>"
@@ -33,6 +33,18 @@ def generate_pdf_report(student, grades, behaviors, attendances, homeworks, avg_
     
     if not homework_html:
         homework_html = "<tr><td colspan='3'>No homework assigned</td></tr>"
+    
+    taking_notes_yes = len([a for a in activities if a.activity_type == "taking-notes" and a.status == "yes"])
+    taking_notes_no = len([a for a in activities if a.activity_type == "taking-notes" and a.status == "no"])
+    participation_yes = len([a for a in activities if a.activity_type == "participation" and a.status == "yes"])
+    participation_no = len([a for a in activities if a.activity_type == "participation" and a.status == "no"])
+    
+    activity_html = ""
+    for a in activities:
+        activity_html += f"<tr><td>{a.activity_type}</td><td>{a.status}</td><td>{a.date.strftime('%Y-%m-%d')}</td></tr>"
+    
+    if not activity_html:
+        activity_html = "<tr><td colspan='3'>No activity records</td></tr>"
     
     present = len([a for a in attendances if a.status == 'present'])
     absent = len([a for a in attendances if a.status == 'absent'])
@@ -69,6 +81,8 @@ def generate_pdf_report(student, grades, behaviors, attendances, homeworks, avg_
             <div class="summary-item"><span class="label">Total Behaviors:</span> {len(behaviors)}</div>
             <div class="summary-item"><span class="label">Attendance:</span> {present} present, {absent} absent, {late} late (out of {total})</div>
             <div class="summary-item"><span class="label">Homework:</span> {pending_count} pending, {submitted_count} submitted, {other_count} other (out of {len(homeworks)})</div>
+            <div class="summary-item"><span class="label">Activity - Taking Notes:</span> {taking_notes_yes} yes, {taking_notes_no} no</div>
+            <div class="summary-item"><span class="label">Activity - Participation:</span> {participation_yes} yes, {participation_no} no</div>
             {f'<div class="summary-item"><span class="label">Details:</span> {student.details}</div>' if student.details else ''}
         </div>
         
@@ -96,6 +110,12 @@ def generate_pdf_report(student, grades, behaviors, attendances, homeworks, avg_
         <table>
             <thead><tr><th>Title</th><th>Status</th><th>Assigned/Due</th></tr></thead>
             <tbody>{homework_html}</tbody>
+        </table>
+        
+        <h2>Activity</h2>
+        <table>
+            <thead><tr><th>Type</th><th>Status</th><th>Date</th></tr></thead>
+            <tbody>{activity_html}</tbody>
         </table>
         
         <div class="footer">

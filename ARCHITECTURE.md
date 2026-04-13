@@ -12,10 +12,11 @@
 │    └── Links: /students (Dashboard button)                              │
 │                                                                         │
 │  dashboard.html (student detail page)                                    │
-│    ├── Uses: /api/grades/{id} (PUT/DELETE)                             │
+│  ├── Uses: /api/grades/{id} (PUT/DELETE)                             │
 │    ├── Uses: /api/behaviors/{id} (PUT/DELETE)                          │
 │    ├── Uses: /api/attendance/{id} (PUT/DELETE)                         │
 │    ├── Uses: /api/homework/{id} (PUT/DELETE)                           │
+│    ├── Uses: /api/activities/{id} (PUT/DELETE)                         │
 │    ├── Uses: /api/students/{name} (PUT/DELETE)                         │
 │    └── Uses: localStorage for authToken                                 │
 │                                                                         │
@@ -47,8 +48,8 @@
 │  4. POST /api/command (auth required)                                  │
 │     └── Uses: commands.parse_command() → determines action              │
 │     └── Actions: add_student, add_grade, add_behavior,                  │
-│                  add_attendance, add_homework, get_report,             │
-│                  open_dashboard, list_dashboard                        │
+│                  add_attendance, add_homework, add_activity,           │
+│                  get_report, open_dashboard, list_dashboard            │
 │                                                                         │
 │  5. API Endpoints (auth required):                                      │
 │     ├── POST   /api/students        → create student                   │
@@ -56,6 +57,7 @@
 │     ├── POST   /api/grades          → add grade                        │
 │     ├── POST   /api/behaviors       → add behavior                     │
 │     ├── POST   /api/attendance      → add attendance                   │
+│     ├── POST   /api/activities      → add activity                     │
 │     ├── GET    /api/students/{name}/report → get report (JSON)         │
 │     ├── POST   /api/students/{name}/report/pdf → get PDF               │
 │     ├── PUT    /api/grades/{id}     → update grade                    │
@@ -66,6 +68,9 @@
 │     ├── DELETE /api/attendance/{id} → delete attendance                │
 │     ├── PUT    /api/homework/{id}   → update homework                  │
 │     ├── DELETE /api/homework/{id}   → delete homework                  │
+│     ├── POST   /api/activities     → add activity                      │
+│     ├── PUT    /api/activities/{id} → update activity                  │
+│     ├── DELETE /api/activities/{id} → delete activity                  │
 │     ├── PUT    /api/students/{name} → update student                   │
 │     ├── DELETE /api/students/{name} → delete student (cascade)         │
 │     ├── POST   /api/init-admin      → create first admin               │
@@ -87,9 +92,11 @@
 │  Commands handled:                                                       │
 │  ├── /add-student <name> [--details "..."]                             │
 │  ├── /grade <name> <score> [--subject <sub>] [--date YYYY-MM-DD]      │
-│  ├── /behavior <name> <type> [--note "..."] [--date YYYY-MM-DD]        │
+│  ├── /behavior <name> <type> [--note "..."] [--date YYYY-MM-DD]      │
 │  ├── /attendance <name> <status> [--date YYYY-MM-DD]                   │
 │  ├── /homework <name> <title> [--due YYYY-MM-DD] [--status <status>]   │
+│  ├── /activity <name> <type> <status> [--date YYYY-MM-DD]              │
+│  │       (type: taking-notes|participation, status: yes|no)            │
 │  ├── /report <name> [--from YYYY-MM-DD] [--to YYYY-MM-DD] [--pdf]      │
 │  ├── /dashboard [<name>] / /dash / /d                                   │
 │  └── /help                                                              │
@@ -108,11 +115,24 @@
 │                                                                         │
 │  Student (id, name, details, created_at)                                │
 │       ├── grades: List[Grade] (cascade delete)                          │
-│       ├── behaviors: List[Behavior] (cascade delete)                   │
+│       ├── behaviors: List[Behavior] (cascade delete)                       │
 │       ├── attendances: List[Attendance] (cascade delete)               │
-│       └── homeworks: List[Homework] (cascade delete)                   │
+│       ├── homeworks: List[Homework] (cascade delete)                   │
+│       └── activities: List[Activity] (cascade delete)                   │
 │                                                                         │
-│  Grade (id, student_id, score, subject, created_at)                    │
+│  Grade (id, student_id, score, subject, created_at)                      │
+│       └── student: Student (relationship)                               │
+│                                                                         │
+│  Behavior (id, student_id, note, behavior_type, created_at)            │
+│       └── student: Student (relationship)                               │
+│                                                                         │
+│  Attendance (id, student_id, status, date)                              │
+│       └── student: Student (relationship)                               │
+│                                                                         │
+│  Homework (id, student_id, title, due_date, status, created_at)       │
+│       └── student: Student (relationship)                               │
+│                                                                         │
+│  Activity (id, student_id, activity_type, status, date, created_at)    │
 │       └── student: Student (relationship)                               │
 │                                                                         │
 │  Behavior (id, student_id, note, behavior_type, created_at)            │

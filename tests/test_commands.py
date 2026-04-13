@@ -209,3 +209,39 @@ class TestParseCommand:
         result = parse_command("/dash John")
         assert result["action"] == "open_dashboard"
         assert result["student_name"] == "John"
+    
+    def test_activity_taking_notes_yes(self):
+        result = parse_command("/activity John taking-notes yes")
+        assert result["action"] == "add_activity"
+        assert result["student_name"] == "John"
+        assert result["activity_type"] == "taking-notes"
+        assert result["status"] == "yes"
+    
+    def test_activity_participation_no(self):
+        result = parse_command("/activity John participation no")
+        assert result["action"] == "add_activity"
+        assert result["activity_type"] == "participation"
+        assert result["status"] == "no"
+    
+    def test_activity_with_date(self):
+        result = parse_command("/activity John taking-notes yes --date 2024-03-20")
+        assert result["action"] == "add_activity"
+        assert result["date"] == "2024-03-20"
+    
+    def test_activity_invalid_type(self):
+        result = parse_command("/activity John invalid yes")
+        assert result["action"] == "error"
+        assert "Invalid type" in result["message"]
+    
+    def test_activity_invalid_status(self):
+        result = parse_command("/activity John taking-notes maybe")
+        assert result["action"] == "error"
+        assert "Invalid status" in result["message"]
+    
+    def test_activity_missing_args(self):
+        result = parse_command("/activity John")
+        assert result["action"] == "error"
+    
+    def test_activity_partial_args(self):
+        result = parse_command("/activity John taking-notes")
+        assert result["action"] == "error"

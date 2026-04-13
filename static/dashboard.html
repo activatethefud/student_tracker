@@ -268,6 +268,53 @@
             <p class="text-gray-500 text-center py-4">No homework assigned</p>
             {% endif %}
         </div>
+        
+        <div class="bg-white rounded-lg shadow-lg p-4 sm:p-6">
+            <div class="flex justify-between items-center mb-4">
+                <h2 class="text-lg font-bold">Activity</h2>
+                <span class="text-sm text-gray-500">{{ activities|length }} records</span>
+            </div>
+            {% if activities %}
+            <div class="overflow-x-auto">
+                <table class="w-full text-sm">
+                    <thead class="bg-gray-50">
+                        <tr>
+                            <th class="px-3 py-2 text-left">Type</th>
+                            <th class="px-3 py-2 text-left">Status</th>
+                            <th class="px-3 py-2 text-left">Date</th>
+                            <th class="px-3 py-2 text-right">Actions</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {% for activity in activities %}
+                        <tr class="border-t">
+                            <td class="px-3 py-2">{{ activity.activity_type }}</td>
+                            <td class="px-3 py-2">
+                                <span class="px-2 py-1 rounded text-xs font-medium
+                                    {% if activity.status == 'yes' %}bg-green-100 text-green-800
+                                    {% else %}bg-red-100 text-red-800{% endif %}">
+                                    {{ activity.status }}
+                                </span>
+                            </td>
+                            <td class="px-3 py-2 text-gray-500">
+                                {% if activity.date %}{{ activity.date.strftime('%Y-%m-%d') }}{% else %}-{% endif %}
+                            </td>
+                            <td class="px-3 py-2 text-right">
+                                <button onclick="showEditModal('activity', {{ activity.id }}, null, null, null, null, null, null, null, null, null, '{{ activity.activity_type }}', '{{ activity.status }}', '{% if activity.date %}{{ activity.date.strftime('%Y-%m-%d') }}{% endif %}')" 
+                                        class="text-blue-500 hover:underline mr-2">Edit</button>
+                                <button onclick="confirmDelete('activity', {{ activity.id }}, 'delete-activity-btn-{{ activity.id }}')" 
+                                        id="delete-activity-btn-{{ activity.id }}"
+                                        class="text-red-500 hover:underline">Delete</button>
+                            </td>
+                        </tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+            </div>
+            {% else %}
+            <p class="text-gray-500 text-center py-4">No activity records</p>
+            {% endif %}
+        </div>
     </div>
     
     <div id="edit-modal" class="hidden fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
@@ -400,7 +447,7 @@
             document.getElementById('edit-modal').classList.remove('hidden');
         }
         
-        function showEditModal(type, id, score, subject, behaviorType, note, status, date, title, homeworkStatus, dueDate) {
+        function showEditModal(type, id, score, subject, behaviorType, note, status, date, title, homeworkStatus, dueDate, activityType, activityStatus, activityDate) {
             document.getElementById('edit-modal-title').textContent = 'Edit ' + type.charAt(0).toUpperCase() + type.slice(1);
             document.getElementById('edit-type').value = type;
             document.getElementById('edit-id').value = id;
@@ -462,6 +509,27 @@
                         <input type="date" id="edit-homework-due" value="${dueDate || ''}" class="w-full border rounded px-3 py-2">
                     </div>
                 `;
+            } else if (type === 'activity') {
+                fields = `
+                    <div>
+                        <label class="block text-sm font-medium mb-1">Type</label>
+                        <select id="edit-activity-type" class="w-full border rounded px-3 py-2">
+                            <option value="taking-notes" ${activityType === 'taking-notes' ? 'selected' : ''}>Taking Notes</option>
+                            <option value="participation" ${activityType === 'participation' ? 'selected' : ''}>Participation</option>
+                        </select>
+                    </div>
+                    <div>
+                        <label class="block text-sm font-medium mb-1">Status</label>
+                        <select id="edit-activity-status" class="w-full border rounded px-3 py-2">
+                            <option value="yes" ${activityStatus === 'yes' ? 'selected' : ''}>Yes</option>
+                            <option value="no" ${activityStatus === 'no' ? 'selected' : ''}>No</option>
+                        </select>
+                    </div>
+                    <div>
+                        <label class="block text-sm font-medium mb-1">Date</label>
+                        <input type="date" id="edit-activity-date" value="${activityDate || ''}" class="w-full border rounded px-3 py-2">
+                    </div>
+                `;
             }
             
             document.getElementById('edit-fields').innerHTML = fields;
@@ -511,6 +579,13 @@
                     title: document.getElementById('edit-homework-title').value,
                     status: document.getElementById('edit-homework-status').value,
                     due_date: document.getElementById('edit-homework-due').value || null
+                };
+            } else if (type === 'activity') {
+                url = `/api/activities/${id}`;
+                body = {
+                    activity_type: document.getElementById('edit-activity-type').value,
+                    status: document.getElementById('edit-activity-status').value,
+                    date: document.getElementById('edit-activity-date').value || null
                 };
             }
             
@@ -587,6 +662,7 @@
             else if (type === 'behavior') url = `/api/behaviors/${id}`;
             else if (type === 'attendance') url = `/api/attendance/${id}`;
             else if (type === 'homework') url = `/api/homework/${id}`;
+            else if (type === 'activity') url = `/api/activities/${id}`;
             
             try {
                 const response = await fetch(url, {
