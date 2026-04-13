@@ -10,10 +10,42 @@
     </style>
 </head>
 <body class="p-2 sm:p-3 md:p-4">
+    <div id="login-modal" class="hidden fixed inset-0 bg-black bg-opacity-50 flex items-end sm:items-center justify-center z-50 p-0 sm:p-4">
+        <div class="bg-white rounded-t-lg sm:rounded-lg p-4 sm:p-6 max-w-sm w-full max-h-[90vh] sm:max-h-none overflow-y-auto">
+            <h2 class="text-lg sm:text-xl font-bold mb-4">Login</h2>
+            <form id="login-form" class="space-y-3 sm:space-y-4">
+                <div>
+                    <label class="block text-sm font-medium">Username</label>
+                    <input type="text" id="login-username" class="w-full border rounded px-3 py-2 text-base" required>
+                </div>
+                <div>
+                    <label class="block text-sm font-medium">Password</label>
+                    <input type="password" id="login-password" class="w-full border rounded px-3 py-2 text-base" required>
+                </div>
+                <div class="flex gap-2">
+                    <button type="submit" class="flex-1 bg-blue-500 text-white py-2 sm:py-2 rounded hover:bg-blue-600 text-base">Login</button>
+                    <button type="button" onclick="hideLogin()" class="px-4 py-2 border rounded text-base">Cancel</button>
+                </div>
+            </form>
+            <div id="login-error" class="text-red-500 text-sm mt-2 hidden"></div>
+            <div id="reset-section" class="hidden mt-3 sm:mt-4 p-3 bg-yellow-50 border border-yellow-200 rounded">
+                <p class="text-sm text-yellow-800 font-medium">Account Locked</p>
+                <p class="text-xs text-yellow-600 mb-2">Enter master password to reset admin</p>
+                <input type="password" id="master-password" class="w-full border rounded px-3 py-2 text-sm" placeholder="Master password">
+                <button onclick="resetWithMaster()" class="mt-2 w-full bg-yellow-500 text-white py-1 rounded hover:bg-yellow-600 text-sm">Reset Admin</button>
+            </div>
+        </div>
+    </div>
+    
     <div class="max-w-sm sm:max-w-md md:max-w-2xl lg:max-w-4xl mx-auto space-y-4">
         <div class="flex flex-col sm:flex-row sm:justify-between sm:items-center gap-2">
-            <a href="/students" class="text-blue-500 hover:underline text-sm sm:text-base">← All Students</a>
-            <button onclick="showStudentEditModal()" class="text-sm text-gray-500 hover:text-gray-700">Edit Student</button>
+            <div class="flex items-center gap-3">
+                <a href="/students" class="text-blue-500 hover:underline text-sm sm:text-base">← All Students</a>
+                <a href="/" class="text-blue-500 hover:underline text-sm sm:text-base">← Chat</a>
+            </div>
+            <div id="auth-section">
+                <button onclick="showLogin()" class="text-blue-500 hover:underline text-sm sm:text-base">Login</button>
+            </div>
         </div>
         
         <div class="bg-white rounded-lg shadow-lg p-4 sm:p-6">
@@ -245,6 +277,97 @@
     
     <script>
         let authToken = localStorage.getItem('student_tracker_token');
+        
+        function showLogin() {
+            document.getElementById('login-modal').classList.remove('hidden');
+            document.getElementById('login-error').classList.add('hidden');
+            document.getElementById('reset-section').classList.add('hidden');
+            document.getElementById('login-username').value = '';
+            document.getElementById('login-password').value = '';
+            document.getElementById('master-password').value = '';
+        }
+        
+        function hideLogin() {
+            document.getElementById('login-modal').classList.add('hidden');
+            document.getElementById('login-error').classList.add('hidden');
+            document.getElementById('reset-section').classList.add('hidden');
+        }
+        
+        document.getElementById('login-form').addEventListener('submit', async (e) => {
+            e.preventDefault();
+            const username = document.getElementById('login-username').value;
+            const password = document.getElementById('login-password').value;
+            
+            const formData = new FormData();
+            formData.append('username', username);
+            formData.append('password', password);
+            
+            try {
+                const response = await fetch('/token', {
+                    method: 'POST',
+                    body: formData
+                });
+                
+                const data = await response.json();
+                
+                if (response.ok) {
+                    authToken = data.access_token;
+                    localStorage.setItem('student_tracker_token', authToken);
+                    hideLogin();
+                    document.getElementById('auth-section').innerHTML = 
+                        '<span class="text-green-600 text-sm">' + username + '</span> <button onclick="logout()" class="ml-2 text-red-500 hover:underline text-sm">Logout</button>';
+                    location.reload();
+                } else if (response.status === 423) {
+                    document.getElementById('login-error').textContent = data.detail;
+                    document.getElementById('login-error').classList.remove('hidden');
+                    document.getElementById('reset-section').classList.remove('hidden');
+                    document.getElementById('master-password').focus();
+                } else {
+                    document.getElementById('login-error').textContent = data.detail || 'Login failed';
+                    document.getElementById('login-error').classList.remove('hidden');
+                }
+            } catch (err) {
+                document.getElementById('login-error').textContent = 'Login failed: ' + err.message;
+                document.getElementById('login-error').classList.remove('hidden');
+            }
+        });
+        
+        async function resetWithMaster() {
+            const username = document.getElementById('login-username').value;
+            const masterPassword = document.getElementById('master-password').value;
+            
+            try {
+                const response = await fetch('/api/reset-admin?username=' + encodeURIComponent(username) + '&master_password=' + encodeURIComponent(masterPassword), {
+                    method: 'POST'
+                });
+                const data = await response.json();
+                
+                if (data.success) {
+                    const parts = data.message.match(/Username: (\w+), Password: (\w+)/);
+                    if (parts) {
+                        document.getElementById('login-password').value = parts[2];
+                        document.getElementById('login-form').dispatchEvent(new Event('submit'));
+                    }
+                } else {
+                    document.getElementById('login-error').textContent = data.message || 'Reset failed';
+                    document.getElementById('login-error').classList.remove('hidden');
+                }
+            } catch (err) {
+                document.getElementById('login-error').textContent = 'Reset failed: ' + err.message;
+                document.getElementById('login-error').classList.remove('hidden');
+            }
+        }
+        
+        function logout() {
+            authToken = null;
+            localStorage.removeItem('student_tracker_token');
+            document.getElementById('auth-section').innerHTML = '<button onclick="showLogin()" class="text-blue-500 hover:underline text-sm sm:text-base">Login</button>';
+        }
+        
+        if (authToken) {
+            document.getElementById('auth-section').innerHTML = 
+                '<button onclick="logout()" class="text-red-500 hover:underline text-sm">Logout</button>';
+        }
         
         function showStudentEditModal() {
             document.getElementById('edit-modal-title').textContent = 'Edit Student';

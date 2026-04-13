@@ -211,3 +211,44 @@ class TestFrontend:
         rendered = template.render(request={}, students=[], admin_exists=True)
         assert 'Dashboard' in rendered
         assert '/students' in rendered
+    
+    def test_dashboard_has_login_modal(self):
+        """Verify dashboard has login modal"""
+        template = self.env.get_template('dashboard.html')
+        rendered = template.render(
+            request={},
+            student={'name': 'John', 'details': ''},
+            grades=[], behaviors=[], attendances=[], homeworks=[],
+            avg_grade=0, attendance_pct=0, pending_hw=0, submitted_hw=0, other_hw=0
+        )
+        assert 'login-modal' in rendered
+        assert 'login-form' in rendered
+    
+    def test_dashboard_has_login_functionality(self):
+        """Verify dashboard has login/logout functions"""
+        template = self.env.get_template('dashboard.html')
+        rendered = template.render(
+            request={},
+            student={'name': 'John', 'details': ''},
+            grades=[], behaviors=[], attendances=[], homeworks=[],
+            avg_grade=0, attendance_pct=0, pending_hw=0, submitted_hw=0, other_hw=0
+        )
+        assert 'function showLogin()' in rendered
+        assert 'function logout()' in rendered
+    
+    def test_dashboard_auth_section_present(self):
+        """Verify dashboard has auth section"""
+        template = self.env.get_template('dashboard.html')
+        rendered = template.render(
+            request={},
+            student={'name': 'John', 'details': ''},
+            grades=[], behaviors=[], attendances=[], homeworks=[],
+            avg_grade=0, attendance_pct=0, pending_hw=0, submitted_hw=0, other_hw=0
+        )
+        assert 'auth-section' in rendered
+    
+    def test_students_list_has_login_modal(self):
+        """Verify students list has login modal"""
+        template = self.env.get_template('students.html')
+        rendered = template.render(request={}, students=[])
+        assert 'login-modal' in rendered
