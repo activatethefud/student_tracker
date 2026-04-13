@@ -21,37 +21,48 @@ def parse_command(command: str) -> dict:
     
     if cmd == "grade":
         if len(args) < 2:
-            return {"action": "error", "message": "Usage: /grade <name> <score> [--subject Math]"}
+            return {"action": "error", "message": "Usage: /grade <name> <score> [--subject Math] [--date YYYY-MM-DD]"}
         name = args[0]
         try:
             score = float(args[1])
         except ValueError:
             return {"action": "error", "message": "Score must be a number"}
         subject = "General"
+        date_str = None
         for i, arg in enumerate(args):
             if arg == "--subject" and i + 1 < len(args):
                 subject = args[i + 1]
-                break
-        return {"action": "add_grade", "student_name": name, "score": score, "subject": subject}
+            elif arg in ("--date", "--at") and i + 1 < len(args):
+                date_str = args[i + 1]
+        return {"action": "add_grade", "student_name": name, "score": score, "subject": subject, "date": date_str}
     
     if cmd in ("behavior", "behave"):
         if len(args) < 1:
-            return {"action": "error", "message": "Usage: /behavior <name> <type> [--note \"text\"]"}
+            return {"action": "error", "message": "Usage: /behavior <name> <type> [--note \"text\"] [--date YYYY-MM-DD]"}
         name = args[0]
         behavior_type = "neutral"
         note = ""
+        date_str = None
         for i, arg in enumerate(args):
             if arg == "--note" and i + 1 < len(args):
                 note = " ".join(args[i+1:]).strip('"')
-                break
+            elif arg in ("--date", "--at") and i + 1 < len(args):
+                date_str = args[i + 1]
             elif arg in ("positive", "negative", "neutral"):
                 behavior_type = arg
-        return {"action": "add_behavior", "student_name": name, "behavior_type": behavior_type, "note": note}
+        return {"action": "add_behavior", "student_name": name, "behavior_type": behavior_type, "note": note, "date": date_str}
     
     if cmd in ("attendance", "attend"):
         if len(args) < 2:
-            return {"action": "error", "message": "Usage: /attendance <name> present|absent|late"}
-        return {"action": "mark_attendance", "student_name": args[0], "status": args[1].lower()}
+            return {"action": "error", "message": "Usage: /attendance <name> present|absent|late [--date YYYY-MM-DD]"}
+        date_str = None
+        for i, arg in enumerate(args):
+            if arg in ("--date", "--at") and i + 1 < len(args):
+                date_str = args[i + 1]
+        status_idx = 1 if args[1].lower() in ("present", "absent", "late") else 0
+        if len(args) < 2 or args[status_idx].lower() not in ("present", "absent", "late"):
+            return {"action": "error", "message": "Usage: /attendance <name> present|absent|late [--date YYYY-MM-DD]"}
+        return {"action": "mark_attendance", "student_name": args[0], "status": args[status_idx].lower(), "date": date_str}
     
     if cmd in ("report", "stats"):
         if len(args) < 1:
@@ -74,9 +85,9 @@ def parse_command(command: str) -> dict:
     if cmd == "help":
         return {"action": "help", "message": """Available commands:
 /add-student <name> - Add a new student
-/grade <name> <score> [--subject <subject>] - Add a grade
-/behavior <name> <type> [--note "note"] - Record behavior (positive/negative/neutral)
-/attendance <name> present|absent|late - Mark attendance
+/grade <name> <score> [--subject <subject>] [--date YYYY-MM-DD] - Add a grade
+/behavior <name> <type> [--note "note"] [--date YYYY-MM-DD] - Record behavior (positive/negative/neutral)
+/attendance <name> present|absent|late [--date YYYY-MM-DD] - Mark attendance
 /report <name> [--from YYYY-MM-DD] [--to YYYY-MM-DD] [--pdf] - Get student report
 /help - Show this help"""}
     

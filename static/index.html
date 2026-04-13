@@ -8,14 +8,46 @@
     <script src="https://cdn.tailwindcss.com"></script>
     <style>
         body { background-color: #f3f4f6; }
-        .chat-container { height: calc(100vh - 200px); overflow-y: auto; }
+        .chat-container { height: calc(100vh - 240px); overflow-y: auto; }
         .message-user { background-color: #3b82f6; color: white; }
         .message-system { background-color: #e5e7eb; color: #1f2937; }
     </style>
 </head>
 <body class="p-4 max-w-4xl mx-auto">
+    {% if not admin_exists %}
+    <div class="bg-yellow-100 border border-yellow-400 text-yellow-700 px-4 py-3 rounded mb-4">
+        <p>No admin account found. <a href="/setup" class="underline font-bold">Create one now</a></p>
+    </div>
+    {% endif %}
+    
     <div class="bg-white rounded-lg shadow-lg p-6">
-        <h1 class="text-2xl font-bold mb-4">Student Tracker</h1>
+        <div class="flex justify-between items-center mb-4">
+            <h1 class="text-2xl font-bold">Student Tracker</h1>
+            <div id="auth-section">
+                <button onclick="showLogin()" class="text-blue-500 hover:underline">Login</button>
+            </div>
+        </div>
+        
+        <div id="login-modal" class="hidden fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
+            <div class="bg-white rounded-lg p-6 max-w-sm w-full">
+                <h2 class="text-xl font-bold mb-4">Login</h2>
+                <form id="login-form" class="space-y-4">
+                    <div>
+                        <label class="block text-sm font-medium">Username</label>
+                        <input type="text" id="login-username" class="w-full border rounded px-3 py-2" required>
+                    </div>
+                    <div>
+                        <label class="block text-sm font-medium">Password</label>
+                        <input type="password" id="login-password" class="w-full border rounded px-3 py-2" required>
+                    </div>
+                    <div class="flex gap-2">
+                        <button type="submit" class="flex-1 bg-blue-500 text-white py-2 rounded hover:bg-blue-600">Login</button>
+                        <button type="button" onclick="hideLogin()" class="px-4 py-2 border rounded">Cancel</button>
+                    </div>
+                </form>
+                <div id="login-error" class="text-red-500 text-sm mt-2 hidden"></div>
+            </div>
+        </div>
         
         <div id="chat-box" class="chat-container border rounded p-4 mb-4 space-y-2">
             <div class="message-system p-3 rounded-lg">
@@ -52,6 +84,60 @@
     </div>
 
     <script>
+        let authToken = localStorage.getItem('student_tracker_token');
+        
+        function showLogin() {
+            document.getElementById('login-modal').classList.remove('hidden');
+        }
+        
+        function hideLogin() {
+            document.getElementById('login-modal').classList.add('hidden');
+            document.getElementById('login-error').classList.add('hidden');
+        }
+        
+        document.getElementById('login-form').addEventListener('submit', async (e) => {
+            e.preventDefault();
+            const username = document.getElementById('login-username').value;
+            const password = document.getElementById('login-password').value;
+            
+            const formData = new FormData();
+            formData.append('username', username);
+            formData.append('password', password);
+            
+            try {
+                const response = await fetch('/token', {
+                    method: 'POST',
+                    body: formData
+                });
+                
+                if (response.ok) {
+                    const data = await response.json();
+                    authToken = data.access_token;
+                    localStorage.setItem('student_tracker_token', authToken);
+                    hideLogin();
+                    document.getElementById('auth-section').innerHTML = 
+                        '<span class="text-green-600">Logged in as ' + username + '</span> <button onclick="logout()" class="ml-2 text-red-500 hover:underline">Logout</button>';
+                } else {
+                    document.getElementById('login-error').textContent = 'Invalid username or password';
+                    document.getElementById('login-error').classList.remove('hidden');
+                }
+            } catch (err) {
+                document.getElementById('login-error').textContent = 'Login failed';
+                document.getElementById('login-error').classList.remove('hidden');
+            }
+        });
+        
+        function logout() {
+            authToken = null;
+            localStorage.removeItem('student_tracker_token');
+            location.reload();
+        }
+        
+        if (authToken) {
+            document.getElementById('auth-section').innerHTML = 
+                '<button onclick="logout()" class="text-red-500 hover:underline">Logout</button>';
+        }
+        
         const chatBox = document.getElementById('chat-box');
         
         function addMessage(text, isUser = true) {
@@ -70,11 +156,26 @@
             addMessage(command, true);
             input.value = '';
             
+            if (!authToken) {
+                addMessage('Please login first to use commands.', false);
+                showLogin();
+                return;
+            }
+            
             const response = await fetch('/api/command', {
                 method: 'POST',
-                headers: {'Content-Type': 'application/json'},
+                headers: {
+                    'Content-Type': 'application/json',
+                    'Authorization': 'Bearer ' + authToken
+                },
                 body: JSON.stringify({command: command})
             });
+            
+            if (response.status === 401) {
+                addMessage('Session expired. Please login again.', false);
+                showLogin();
+                return;
+            }
             
             const data = await response.json();
             addMessage(data.message || data.error || 'Unknown response');

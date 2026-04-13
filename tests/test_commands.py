@@ -121,3 +121,27 @@ class TestParseCommand:
     def test_missing_args_report(self):
         result = parse_command("/report")
         assert result["action"] == "error"
+    
+    def test_grade_with_date(self):
+        result = parse_command("/grade John 90 --date 2024-03-15")
+        assert result["action"] == "add_grade"
+        assert result["date"] == "2024-03-15"
+    
+    def test_grade_with_subject_and_date(self):
+        result = parse_command("/grade John 85 --subject Science --date 2024-02-01")
+        assert result["subject"] == "Science"
+        assert result["date"] == "2024-02-01"
+    
+    def test_behavior_with_date(self):
+        result = parse_command("/behavior John positive --note \"Good work\" --date 2024-03-20")
+        assert result["action"] == "add_behavior"
+        assert result["date"] == "2024-03-20"
+    
+    def test_attendance_with_date(self):
+        result = parse_command("/attendance John present --date 2024-03-10")
+        assert result["action"] == "mark_attendance"
+        assert result["date"] == "2024-03-10"
+    
+    def test_attendance_with_at_alias(self):
+        result = parse_command("/attendance John late --at 2024-01-15")
+        assert result["date"] == "2024-01-15"

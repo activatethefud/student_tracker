@@ -94,7 +94,17 @@ def startup():
 @app.get("/")
 def home(db: Session = Depends(get_db)):
     students = db.query(Student).all()
-    return templates.TemplateResponse("index.html", {"request": {}, "students": students})
+    admin_exists = db.query(User).first() is not None
+    return templates.TemplateResponse("index.html", {"request": {}, "students": students, "admin_exists": admin_exists})
+
+
+@app.get("/setup")
+def setup_page(db: Session = Depends(get_db)):
+    admin_exists = db.query(User).first() is not None
+    if admin_exists:
+        from fastapi import RedirectResponse
+        return RedirectResponse("/")
+    return templates.TemplateResponse("setup.html", {"request": {}})
 
 
 @app.post("/token")
@@ -195,7 +205,7 @@ class CommandRequest(BaseModel):
 
 
 @app.post("/api/command")
-def execute_command(request: CommandRequest, db: Session = Depends(get_db)):
+def execute_command(request: CommandRequest, db: Session = Depends(get_db), current_user: User = Depends(get_current_user)):
     cmd = parse_command(request.command)
     
     if cmd["action"] == "help":
@@ -218,18 +228,30 @@ def execute_command(request: CommandRequest, db: Session = Depends(get_db)):
         if not student:
             return {"success": False, "message": f"Student '{cmd['student_name']}' not found. Use /add-student first."}
         new_grade = Grade(student_id=student.id, score=cmd["score"], subject=cmd["subject"])
+        if cmd.get("date"):
+            try:
+                new_grade.created_at = datetime.strptime(cmd["date"], "%Y-%m-%d")
+            except ValueError:
+                pass
         db.add(new_grade)
         db.commit()
-        return {"success": True, "message": f"Added {cmd['subject']} grade {cmd['score']} for {cmd['student_name']}"}
+        date_msg = f" (dated: {cmd['date']})" if cmd.get("date") else ""
+        return {"success": True, "message": f"Added {cmd['subject']} grade {cmd['score']} for {cmd['student_name']}{date_msg}"}
     
     if cmd["action"] == "add_behavior":
         student = db.query(Student).filter(Student.name == cmd["student_name"]).first()
         if not student:
             return {"success": False, "message": f"Student '{cmd['student_name']}' not found. Use /add-student first."}
         new_behavior = Behavior(student_id=student.id, note=cmd["note"], behavior_type=cmd["behavior_type"])
+        if cmd.get("date"):
+            try:
+                new_behavior.created_at = datetime.strptime(cmd["date"], "%Y-%m-%d")
+            except ValueError:
+                pass
         db.add(new_behavior)
         db.commit()
-        return {"success": True, "message": f"Recorded {cmd['behavior_type']} behavior for {cmd['student_name']}: {cmd['note']}"}
+        date_msg = f" (dated: {cmd['date']})" if cmd.get("date") else ""
+        return {"success": True, "message": f"Recorded {cmd['behavior_type']} behavior for {cmd['student_name']}: {cmd['note']}{date_msg}"}
     
     if cmd["action"] == "mark_attendance":
         student = db.query(Student).filter(Student.name == cmd["student_name"]).first()
@@ -238,9 +260,15 @@ def execute_command(request: CommandRequest, db: Session = Depends(get_db)):
         if cmd["status"] not in ("present", "absent", "late"):
             return {"success": False, "message": "Status must be: present, absent, or late"}
         new_attendance = Attendance(student_id=student.id, status=cmd["status"])
+        if cmd.get("date"):
+            try:
+                new_attendance.date = datetime.strptime(cmd["date"], "%Y-%m-%d")
+            except ValueError:
+                pass
         db.add(new_attendance)
         db.commit()
-        return {"success": True, "message": f"Marked {cmd['student_name']} as {cmd['status']}"}
+        date_msg = f" (dated: {cmd['date']})" if cmd.get("date") else ""
+        return {"success": True, "message": f"Marked {cmd['student_name']} as {cmd['status']}{date_msg}"}
     
     if cmd["action"] == "get_report":
         student = db.query(Student).filter(Student.name == cmd["student_name"]).first()

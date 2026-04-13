@@ -49,7 +49,7 @@ def db():
 
 @pytest.fixture
 def admin_user(db):
-    user = User(username="admin", hashed_password="$2b$12$i8eaWsCVVyUdm/4k..KgbOhnOBksFDljrklQoVHqds1wpwmdXIbTC")
+    user = User(username="admin", hashed_password="$2b$12$1nnSGZ116q5KqAkgVZHSceZQ0NXzKMrGbKXC4fvbMLc5OkIIVWFZO")
     db.add(user)
     db.commit()
     db.refresh(user)
@@ -67,7 +67,7 @@ def student(db):
 
 class TestSetupAdmin:
     def test_setup_admin(self, client):
-        response = client.post("/api/setup-admin?username=admin&password=pass")
+        response = client.post("/api/init-admin?username=admin&password=pass")
         assert response.status_code == 200
         data = response.json()
         assert data["success"] is True
@@ -237,16 +237,11 @@ class TestCommandAPI:
     
     def test_help_command(self, client):
         response = client.post("/api/command", json={"command": "/help"})
-        assert response.status_code == 200
-        data = response.json()
-        assert data["success"] is True
-        assert "commands" in data["message"].lower()
+        assert response.status_code == 401
     
     def test_unknown_command(self, client):
         response = client.post("/api/command", json={"command": "/unknown arg"})
-        assert response.status_code == 200
-        data = response.json()
-        assert data["success"] is False
+        assert response.status_code == 401
     
     def test_command_student_not_found(self, client, admin_user):
         login = client.post("/token", data={"username": "admin", "password": "test"})
