@@ -65,6 +65,31 @@ class TestParseCommand:
         assert result["action"] == "get_report"
         assert result["student_name"] == "John"
     
+    def test_report_with_from_date(self):
+        result = parse_command("/report John --from 2024-01-01")
+        assert result["action"] == "get_report"
+        assert result["student_name"] == "John"
+        assert result["date_from"] == "2024-01-01"
+    
+    def test_report_with_to_date(self):
+        result = parse_command("/report John --to 2024-12-31")
+        assert result["action"] == "get_report"
+        assert result["date_to"] == "2024-12-31"
+    
+    def test_report_with_date_range(self):
+        result = parse_command("/report John --from 2024-01-01 --to 2024-12-31")
+        assert result["date_from"] == "2024-01-01"
+        assert result["date_to"] == "2024-12-31"
+    
+    def test_report_with_pdf_flag(self):
+        result = parse_command("/report John --pdf")
+        assert result["pdf"] is True
+    
+    def test_report_with_date_and_pdf(self):
+        result = parse_command("/report John --from 2024-01-01 --pdf")
+        assert result["date_from"] == "2024-01-01"
+        assert result["pdf"] is True
+    
     def test_help_command(self):
         result = parse_command("/help")
         assert result["action"] == "help"

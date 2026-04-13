@@ -55,8 +55,21 @@ def parse_command(command: str) -> dict:
     
     if cmd in ("report", "stats"):
         if len(args) < 1:
-            return {"action": "error", "message": "Usage: /report <name>"}
-        return {"action": "get_report", "student_name": args[0]}
+            return {"action": "error", "message": "Usage: /report <name> [--from YYYY-MM-DD] [--to YYYY-MM-DD] [--pdf]"}
+        student_name = args[0]
+        date_from = None
+        date_to = None
+        generate_pdf = False
+        for i, arg in enumerate(args):
+            if arg == "--from" and i + 1 < len(args):
+                date_from = args[i + 1]
+            elif arg == "--to" and i + 1 < len(args):
+                date_to = args[i + 1]
+            elif arg == "--date" and i + 1 < len(args):
+                date_from = date_to = args[i + 1]
+            elif arg == "--pdf":
+                generate_pdf = True
+        return {"action": "get_report", "student_name": student_name, "date_from": date_from, "date_to": date_to, "pdf": generate_pdf}
     
     if cmd == "help":
         return {"action": "help", "message": """Available commands:
@@ -64,7 +77,7 @@ def parse_command(command: str) -> dict:
 /grade <name> <score> [--subject <subject>] - Add a grade
 /behavior <name> <type> [--note "note"] - Record behavior (positive/negative/neutral)
 /attendance <name> present|absent|late - Mark attendance
-/report <name> - Get student report
+/report <name> [--from YYYY-MM-DD] [--to YYYY-MM-DD] [--pdf] - Get student report
 /help - Show this help"""}
     
     return {"action": "invalid", "message": f"Unknown command: /{cmd}. Type /help for available commands."}

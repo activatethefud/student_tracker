@@ -1,6 +1,6 @@
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, date
 from typing import Optional
-from fastapi import FastAPI, Depends, HTTPException, status
+from fastapi import FastAPI, Depends, HTTPException, status, Response
 from fastapi.security import OAuth2PasswordBearer, OAuth2PasswordRequestForm
 from starlette.staticfiles import StaticFiles
 from starlette.templating import Jinja2Templates
@@ -246,15 +246,55 @@ def execute_command(request: CommandRequest, db: Session = Depends(get_db)):
         student = db.query(Student).filter(Student.name == cmd["student_name"]).first()
         if not student:
             return {"success": False, "message": f"Student '{cmd['student_name']}' not found"}
+        
         grades = student.grades
         behaviors = student.behaviors
         attendances = student.attendances
+        
+        date_from = cmd.get("date_from")
+        date_to = cmd.get("date_to")
+        
+        if date_from:
+            try:
+                from_date = datetime.strptime(date_from, "%Y-%m-%d")
+                grades = [g for g in grades if g.created_at >= from_date]
+                behaviors = [b for b in behaviors if b.created_at >= from_date]
+                attendances = [a for a in attendances if a.date >= from_date]
+            except ValueError:
+                pass
+        
+        if date_to:
+            try:
+                to_date = datetime.strptime(date_to, "%Y-%m-%d")
+                to_date = to_date + timedelta(days=1)
+                grades = [g for g in grades if g.created_at < to_date]
+                behaviors = [b for b in behaviors if b.created_at < to_date]
+                attendances = [a for a in attendances if a.date < to_date]
+            except ValueError:
+                pass
+        
         avg_grade = sum(g.score for g in grades) / len(grades) if grades else 0
-        report = f"<strong>Report for {student.name}</strong>\n"
+        
+        date_range = ""
+        if date_from and date_to:
+            date_range = f" ({date_from} to {date_to})"
+        elif date_from:
+            date_range = f" (from {date_from})"
+        elif date_to:
+            date_range = f" (to {date_to})"
+        
+        report = f"<strong>Report for {student.name}</strong>{date_range}\n"
         report += f"Average Grade: {avg_grade:.2f}\n"
         report += f"Grades: {', '.join(f'{g.score} ({g.subject})' for g in grades) or 'None'}\n"
         report += f"Behaviors: {', '.join(f'{b.behavior_type}' for b in behaviors) or 'None'}\n"
         report += f"Attendance: {len([a for a in attendances if a.status == 'present'])}/present, {len([a for a in attendances if a.status == 'absent'])}/absent"
+        
+        if cmd.get("pdf"):
+            from app.pdf_generator import generate_pdf_report
+            date_range_display = date_range.replace("(", "").replace(")", "") if date_range else ""
+            pdf_content = generate_pdf_report(student, grades, behaviors, attendances, avg_grade, date_range_display)
+            return Response(content=pdf_content, media_type="application/pdf", headers={"Content-Disposition": f"attachment; filename=report_{student.name}.pdf"})
+        
         return {"success": True, "message": report}
 
 
@@ -267,6 +307,46 @@ def init_admin(username: str = "admin", password: str = "admin123", db: Session 
     db.add(admin)
     db.commit()
     return {"success": True, "message": f"Admin created. Username: {username}, Password: {password}"}
+
+
+@app.post("/api/students/{student_name}/report/pdf")
+def generate_pdf(student_name: str, date_from: str = None, date_to: str = None, db: Session = Depends(get_db), current_user: User = Depends(get_current_user)):
+    from app.pdf_generator import generate_pdf_report
+    
+    student = db.query(Student).filter(Student.name == student_name).first()
+    if not student:
+        return {"success": False, "message": f"Student '{student_name}' not found"}
+    
+    grades = student.grades
+    behaviors = student.behaviors
+    attendances = student.attendances
+    
+    if date_from:
+        from_date = datetime.strptime(date_from, "%Y-%m-%d")
+        grades = [g for g in grades if g.created_at >= from_date]
+        behaviors = [b for b in behaviors if b.created_at >= from_date]
+        attendances = [a for a in attendances if a.date >= from_date]
+    
+    if date_to:
+        to_date = datetime.strptime(date_to, "%Y-%m-%d")
+        to_date = to_date + timedelta(days=1)
+        grades = [g for g in grades if g.created_at < to_date]
+        behaviors = [b for b in behaviors if b.created_at < to_date]
+        attendances = [a for a in attendances if a.date < to_date]
+    
+    avg_grade = sum(g.score for g in grades) / len(grades) if grades else 0
+    
+    date_range = ""
+    if date_from and date_to:
+        date_range = f"{date_from} to {date_to}"
+    elif date_from:
+        date_range = f"from {date_from}"
+    elif date_to:
+        date_range = f"to {date_to}"
+    
+    pdf_content = generate_pdf_report(student, grades, behaviors, attendances, avg_grade, date_range)
+    
+    return Response(content=pdf_content, media_type="application/pdf", headers={"Content-Disposition": f"attachment; filename=report_{student_name}.pdf"})
 
 
 if __name__ == "__main__":
