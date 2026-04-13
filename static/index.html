@@ -1,0 +1,88 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Student Tracker</title>
+    <script src="https://unpkg.com/htmx.org@1.9.12"></script>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <style>
+        body { background-color: #f3f4f6; }
+        .chat-container { height: calc(100vh - 200px); overflow-y: auto; }
+        .message-user { background-color: #3b82f6; color: white; }
+        .message-system { background-color: #e5e7eb; color: #1f2937; }
+    </style>
+</head>
+<body class="p-4 max-w-4xl mx-auto">
+    <div class="bg-white rounded-lg shadow-lg p-6">
+        <h1 class="text-2xl font-bold mb-4">Student Tracker</h1>
+        
+        <div id="chat-box" class="chat-container border rounded p-4 mb-4 space-y-2">
+            <div class="message-system p-3 rounded-lg">
+                Welcome! Type a command to get started. Examples:
+                <ul class="list-disc ml-5 mt-2">
+                    <li><code>/add-student John</code> - Add a student</li>
+                    <li><code>/grade John 90 --subject Math</code> - Add a grade</li>
+                    <li><code>/behavior John positive --note "Helped peer"</code> - Record behavior</li>
+                    <li><code>/attendance John present</code> - Mark attendance</li>
+                    <li><code>/report John</code> - Get student report</li>
+                </ul>
+            </div>
+        </div>
+        
+        <div class="flex gap-2">
+            <input type="text" id="command-input" 
+                   class="flex-1 border rounded px-4 py-2 focus:outline-none focus:ring-2 focus:ring-blue-500"
+                   placeholder="Type a command (e.g., /help)..." 
+                   autocomplete="off">
+            <button onclick="sendCommand()" 
+                    class="bg-blue-500 text-white px-6 py-2 rounded hover:bg-blue-600">
+                Send
+            </button>
+        </div>
+        
+        <div class="mt-4 p-3 bg-gray-100 rounded text-sm">
+            <strong>Quick Reference:</strong>
+            <code>/add-student &lt;name&gt;</code> |
+            <code>/grade &lt;name&gt; &lt;score&gt;</code> |
+            <code>/behavior &lt;name&gt; &lt;type&gt;</code> |
+            <code>/attendance &lt;name&gt; &lt;status&gt;</code> |
+            <code>/report &lt;name&gt;</code>
+        </div>
+    </div>
+
+    <script>
+        const chatBox = document.getElementById('chat-box');
+        
+        function addMessage(text, isUser = true) {
+            const div = document.createElement('div');
+            div.className = isUser ? 'message-user p-3 rounded-lg ml-auto' : 'message-system p-3 rounded-lg';
+            div.innerHTML = text.replace(/\n/g, '<br>');
+            chatBox.appendChild(div);
+            chatBox.scrollTop = chatBox.scrollHeight;
+        }
+        
+        async function sendCommand() {
+            const input = document.getElementById('command-input');
+            const command = input.value.trim();
+            if (!command) return;
+            
+            addMessage(command, true);
+            input.value = '';
+            
+            const response = await fetch('/api/command', {
+                method: 'POST',
+                headers: {'Content-Type': 'application/json'},
+                body: JSON.stringify({command: command})
+            });
+            
+            const data = await response.json();
+            addMessage(data.message || data.error || 'Unknown response');
+        }
+        
+        document.getElementById('command-input').addEventListener('keypress', (e) => {
+            if (e.key === 'Enter') sendCommand();
+        });
+    </script>
+</body>
+</html>
