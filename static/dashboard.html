@@ -513,10 +513,7 @@
                 fields = `
                     <div>
                         <label class="block text-sm font-medium mb-1">Type</label>
-                        <select id="edit-activity-type" class="w-full border rounded px-3 py-2">
-                            <option value="taking-notes" ${activityType === 'taking-notes' ? 'selected' : ''}>Taking Notes</option>
-                            <option value="participation" ${activityType === 'participation' ? 'selected' : ''}>Participation</option>
-                        </select>
+                        <input type="text" id="edit-activity-type" value="${activityType || ''}" class="w-full border rounded px-3 py-2" placeholder="e.g., taking-notes, participation">
                     </div>
                     <div>
                         <label class="block text-sm font-medium mb-1">Status</label>

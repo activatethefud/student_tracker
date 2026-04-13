@@ -229,9 +229,9 @@ class TestParseCommand:
         assert result["date"] == "2024-03-20"
     
     def test_activity_invalid_type(self):
-        result = parse_command("/activity John invalid yes")
-        assert result["action"] == "error"
-        assert "Invalid type" in result["message"]
+        result = parse_command("/activity John custom-type yes")
+        assert result["action"] == "add_activity"
+        assert result["activity_type"] == "custom-type"
     
     def test_activity_invalid_status(self):
         result = parse_command("/activity John taking-notes maybe")
