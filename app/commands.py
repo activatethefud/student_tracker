@@ -66,21 +66,40 @@ def parse_command(command: str) -> dict:
     
     if cmd in ("homework", "hw"):
         if len(args) < 2:
-            return {"action": "error", "message": "Usage: /homework <name> <title> [--due YYYY-MM-DD] [--status pending|submitted]"}
+            return {"action": "error", "message": "Usage: /homework <name> <title> [--due YYYY-MM-DD] [--status <status>]"}
         student_name = args[0]
-        title = " ".join(args[1:])
-        if title.startswith('"') and title.endswith('"'):
-            title = title[1:-1]
+        title_parts = []
         due_date = None
         status = "pending"
+        capture_status = False
+        
         for i, arg in enumerate(args):
-            if arg in ("--due", "--by") and i + 1 < len(args):
-                due_date = args[i + 1]
-            elif arg == "--status" and i + 1 < len(args):
-                if args[i + 1].lower() in ("pending", "submitted"):
-                    status = args[i + 1].lower()
+            if i == 0:
+                continue
+            if arg in ("--due", "--by"):
+                capture_status = False
+                if i + 1 < len(args):
+                    due_date = args[i + 1]
+            elif arg == "--status":
+                capture_status = True
+                status = None
+            elif capture_status:
+                if arg.startswith("--"):
+                    capture_status = False
+                    i -= 1
+                elif status is None:
+                    status = arg.strip('"')
                 else:
-                    return {"action": "error", "message": "Status must be 'pending' or 'submitted'"}
+                    status += " " + arg.strip('"')
+            elif not arg.startswith("--"):
+                title_parts.append(arg)
+        
+        title = " ".join(title_parts)
+        if title.startswith('"') and title.endswith('"'):
+            title = title[1:-1]
+        if status is None:
+            status = "pending"
+        
         return {"action": "add_homework", "student_name": student_name, "title": title, "due_date": due_date, "status": status}
     
     if cmd in ("report", "stats"):

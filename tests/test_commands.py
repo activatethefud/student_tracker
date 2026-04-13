@@ -172,6 +172,7 @@ class TestParseCommand:
         result = parse_command("/homework John")
         assert result["action"] == "error"
     
-    def test_homework_invalid_status(self):
-        result = parse_command('/homework John "Test" --status unknown')
-        assert result["action"] == "error"
+    def test_homework_custom_status(self):
+        result = parse_command('/homework John "Test" --status "in progress"')
+        assert result["action"] == "add_homework"
+        assert result["status"] == "in progress"
