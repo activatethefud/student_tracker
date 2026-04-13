@@ -52,6 +52,9 @@
                     <input type="password" id="master-password" class="w-full border rounded px-3 py-2 text-sm" placeholder="Master password">
                     <button onclick="resetWithMaster()" class="mt-2 w-full bg-yellow-500 text-white py-1 rounded hover:bg-yellow-600 text-sm">Reset Admin</button>
                 </div>
+                <div class="mt-4 pt-3 border-t text-center">
+                    <a href="/setup" class="text-sm text-blue-500 hover:underline">Create new admin account</a>
+                </div>
             </div>
         </div>
         
@@ -61,9 +64,12 @@
                 <ul class="list-disc ml-5 mt-2">
                     <li><code>/add-student John</code> - Add a student</li>
                     <li><code>/grade John 90 --subject Math</code> - Add a grade</li>
-                    <li><code>/behavior John positive --note "Helped peer"</code> - Record behavior</li>
-                    <li><code>/attendance John present</code> - Mark attendance</li>
+                    <li><code>/grade John 90 --date 2024-03-15</code> - Grade with custom date</li>
+                    <li><code>/behavior John positive --note "Great work"</code> - Record behavior</li>
+                    <li><code>/behavior John positive --date 2024-03-20</code> - Behavior with date</li>
+                    <li><code>/attendance John present --date 2024-03-10</code> - Mark attendance</li>
                     <li><code>/report John</code> - Get student report</li>
+                    <li><code>/report John --from 2024-01-01 --to 2024-12-31</code> - Report with date range</li>
                     <li><code>/report John --pdf</code> - Download PDF report</li>
                 </ul>
             </div>
