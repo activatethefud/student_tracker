@@ -761,13 +761,16 @@ def init_admin(username: str = "admin", password: str = "admin123", db: Session 
     return {"success": True, "message": f"Admin created. Username: {username}, Password: {password}"}
 
 
+@app.get("/api/students/{student_name}/report/pdf")
 @app.post("/api/students/{student_name}/report/pdf")
 def generate_pdf(student_name: str, date_from: str = None, date_to: str = None, db: Session = Depends(get_db), current_user: User = Depends(get_current_user)):
     from app.pdf_generator import generate_pdf_report
     
-    student = db.query(Student).filter(Student.name == student_name).first()
-    if not student:
-        return {"success": False, "message": f"Student '{student_name}' not found"}
+    student, error = resolve_student(db, student_name)
+    if error:
+        student = db.query(Student).filter(Student.name == student_name).first()
+        if not student:
+            return {"success": False, "message": f"Student '{student_name}' not found"}
     
     grades = student.grades
     behaviors = student.behaviors
