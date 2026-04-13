@@ -770,3 +770,88 @@ class TestActivityAPI:
         assert "focus" in data["message"]
         assert "engagement" in data["message"]
         assert "1 yes, 1 no" in data["message"]
+
+
+class TestMultiWordName:
+    def test_add_student_with_full_name(self, client, admin_user, db):
+        login = client.post("/token", data={"username": "admin", "password": "test"})
+        token = login.json()["access_token"]
+        
+        response = client.post(
+            "/api/command",
+            json={"command": "/add-student Marko Stefanovic"},
+            headers={"Authorization": f"Bearer {token}"}
+        )
+        assert response.status_code == 200
+        data = response.json()
+        assert data["success"] is True
+        assert "Marko Stefanovic" in data["message"]
+        
+        from app.models import Student
+        student = db.query(Student).filter(Student.name == "Marko Stefanovic").first()
+        assert student is not None
+    
+    def test_add_student_full_name_with_year(self, client, admin_user, db):
+        login = client.post("/token", data={"username": "admin", "password": "test"})
+        token = login.json()["access_token"]
+        
+        response = client.post(
+            "/api/command",
+            json={"command": '/add-student Ana Maria Garcia --year "Grade 8"'},
+            headers={"Authorization": f"Bearer {token}"}
+        )
+        assert response.status_code == 200
+        data = response.json()
+        assert data["success"] is True
+        assert "Ana Maria Garcia" in data["message"]
+        
+        from app.models import Student
+        student = db.query(Student).filter(Student.name == "Ana Maria Garcia").first()
+        assert student is not None
+        assert student.year == "Grade 8"
+    
+    def test_grade_with_full_name(self, client, admin_user, db):
+        login = client.post("/token", data={"username": "admin", "password": "test"})
+        token = login.json()["access_token"]
+        
+        client.post("/api/command", json={"command": "/add-student Marko Stefanovic"}, headers={"Authorization": f"Bearer {token}"})
+        
+        response = client.post(
+            "/api/command",
+            json={"command": "/grade Marko Stefanovic 5 --subject Math"},
+            headers={"Authorization": f"Bearer {token}"}
+        )
+        assert response.status_code == 200
+        data = response.json()
+        assert data["success"] is True
+    
+    def test_attendance_with_full_name(self, client, admin_user, db):
+        login = client.post("/token", data={"username": "admin", "password": "test"})
+        token = login.json()["access_token"]
+        
+        client.post("/api/command", json={"command": "/add-student Marko Stefanovic"}, headers={"Authorization": f"Bearer {token}"})
+        
+        response = client.post(
+            "/api/command",
+            json={"command": "/attendance Marko Stefanovic present"},
+            headers={"Authorization": f"Bearer {token}"}
+        )
+        assert response.status_code == 200
+        data = response.json()
+        assert data["success"] is True
+    
+    def test_activity_with_full_name(self, client, admin_user, db):
+        login = client.post("/token", data={"username": "admin", "password": "test"})
+        token = login.json()["access_token"]
+        
+        client.post("/api/command", json={"command": "/add-student Marko Stefanovic"}, headers={"Authorization": f"Bearer {token}"})
+        
+        response = client.post(
+            "/api/command",
+            json={"command": "/activity Marko Stefanovic focus yes"},
+            headers={"Authorization": f"Bearer {token}"}
+        )
+        assert response.status_code == 200
+        data = response.json()
+        assert data["success"] is True
+        assert "focus" in data["message"]

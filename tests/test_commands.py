@@ -245,3 +245,65 @@ class TestParseCommand:
     def test_activity_partial_args(self):
         result = parse_command("/activity John taking-notes")
         assert result["action"] == "error"
+    
+    def test_add_student_multi_word_name(self):
+        result = parse_command("/add-student Marko Stefanovic")
+        assert result["action"] == "add_student"
+        assert result["name"] == "Marko Stefanovic"
+    
+    def test_add_student_multi_word_name_with_year(self):
+        result = parse_command('/add-student Marko Stefanovic --year "Grade 8"')
+        assert result["action"] == "add_student"
+        assert result["name"] == "Marko Stefanovic"
+        assert result["year"] == "Grade 8"
+    
+    def test_add_student_three_word_name(self):
+        result = parse_command("/add-student Ana Maria Garcia")
+        assert result["action"] == "add_student"
+        assert result["name"] == "Ana Maria Garcia"
+    
+    def test_grade_multi_word_name(self):
+        result = parse_command("/grade Marko Stefanovic 90 --subject Math")
+        assert result["action"] == "add_grade"
+        assert result["student_name"] == "Marko Stefanovic"
+        assert result["score"] == 90
+        assert result["subject"] == "Math"
+    
+    def test_attendance_multi_word_name(self):
+        result = parse_command("/attendance Marko Stefanovic present --date 2024-01-01")
+        assert result["action"] == "mark_attendance"
+        assert result["student_name"] == "Marko Stefanovic"
+        assert result["status"] == "present"
+        assert result["date"] == "2024-01-01"
+    
+    def test_behavior_multi_word_name(self):
+        result = parse_command("/behavior Marko Stefanovic positive --note \"Great work\"")
+        assert result["action"] == "add_behavior"
+        assert result["student_name"] == "Marko Stefanovic"
+        assert result["behavior_type"] == "positive"
+    
+    def test_activity_multi_word_name(self):
+        result = parse_command("/activity Marko Stefanovic taking-notes yes")
+        assert result["action"] == "add_activity"
+        assert result["student_name"] == "Marko Stefanovic"
+        assert result["activity_type"] == "taking-notes"
+        assert result["status"] == "yes"
+    
+    def test_report_multi_word_name(self):
+        result = parse_command("/report Marko Stefanovic --pdf")
+        assert result["action"] == "get_report"
+        assert result["student_name"] == "Marko Stefanovic"
+        assert result["pdf"] is True
+    
+    def test_dashboard_multi_word_name(self):
+        result = parse_command("/dashboard Marko Stefanovic")
+        assert result["action"] == "open_dashboard"
+        assert result["student_name"] == "Marko Stefanovic"
+    
+    def test_activity_multi_word_name_with_date(self):
+        result = parse_command("/activity Marko Stefanovic focus yes --date 2024-03-20")
+        assert result["action"] == "add_activity"
+        assert result["student_name"] == "Marko Stefanovic"
+        assert result["activity_type"] == "focus"
+        assert result["status"] == "yes"
+        assert result["date"] == "2024-03-20"
