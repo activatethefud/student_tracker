@@ -8,7 +8,7 @@ from app.models import Base, Student, User
 import bcrypt
 
 
-TEST_DATABASE_URL = "sqlite:///./test_master.db"
+TEST_DATABASE_URL = "sqlite:///./test_api.db"
 engine = create_engine(TEST_DATABASE_URL, connect_args={"check_same_thread": False})
 TestingSessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=engine)
 
@@ -62,25 +62,26 @@ def admin_user(db):
 
 class TestMasterPassword:
     def test_reset_admin_without_master_password_fails(self, client, admin_user):
-        response = client.post("/api/reset-admin?username=newadmin&password=newpass&master_password=")
+        response = client.post("/api/reset-admin", json={"username": "newadmin", "password": "newpass123456", "master_password": ""})
         assert response.status_code == 200
         data = response.json()
         assert data["success"] is False
         assert "Invalid master password" in data["message"]
     
     def test_reset_admin_with_wrong_master_password_fails(self, client, admin_user):
-        response = client.post("/api/reset-admin?username=newadmin&password=newpass&master_password=wrong")
+        response = client.post("/api/reset-admin", json={"username": "newadmin", "password": "newpass123456", "master_password": "wrong"})
         assert response.status_code == 200
         data = response.json()
         assert data["success"] is False
         assert "Invalid master password" in data["message"]
     
     def test_reset_admin_with_correct_master_password(self, client, admin_user):
-        response = client.post("/api/reset-admin?username=newadmin&password=newpass&master_password=RESET-admin-2024")
+        response = client.post("/api/reset-admin", json={"username": "newadmin", "password": "newpass123456", "master_password": "RESET-admin-2024"})
         assert response.status_code == 200
         data = response.json()
         assert data["success"] is True
         assert "newadmin" in data["message"]
+        assert "access_token" in data
     
     def test_reset_admin_deletes_existing_user(self, client, db, admin_user):
         from sqlalchemy.orm import Session
@@ -88,7 +89,7 @@ class TestMasterPassword:
         
         assert session.query(User).filter(User.username == "admin").first() is not None
         
-        response = client.post("/api/reset-admin?username=newadmin&password=newpass&master_password=RESET-admin-2024")
+        response = client.post("/api/reset-admin", json={"username": "newadmin", "password": "newpass123456", "master_password": "RESET-admin-2024"})
         assert response.status_code == 200
         
         session.close()
@@ -98,27 +99,44 @@ class TestMasterPassword:
         session.close()
     
     def test_can_login_after_reset(self, client, admin_user):
-        client.post("/api/reset-admin?username=newadmin&password=newpass&master_password=RESET-admin-2024")
+        client.post("/api/reset-admin", json={"username": "newadmin", "password": "newpass123456", "master_password": "RESET-admin-2024"})
         
-        response = client.post("/token", data={"username": "newadmin", "password": "newpass"})
+        response = client.post("/token", data={"username": "newadmin", "password": "newpass123456"})
         assert response.status_code == 200
         assert "access_token" in response.json()
     
-    def test_init_admin_works_when_no_users(self, client):
-        response = client.post("/api/init-admin?username=admin&password=admin123")
+    def test_reset_admin_short_password_fails(self, client, admin_user):
+        response = client.post("/api/reset-admin", json={"username": "short", "password": "12345", "master_password": "RESET-admin-2024"})
         assert response.status_code == 200
-        assert response.json()["success"] is True
+        data = response.json()
+        assert data["success"] is False
+        assert "6 characters" in data["message"]
     
-    @pytest.mark.skip(reason="Shared database engine issue - covered by other tests")
-    def test_init_admin_fails_when_users_exist(self, client, db, admin_user):
-        pass
+    def test_reset_admin_short_username_fails(self, client, admin_user):
+        response = client.post("/api/reset-admin", json={"username": "a", "password": "password123456", "master_password": "RESET-admin-2024"})
+        assert response.status_code == 200
+        data = response.json()
+        assert data["success"] is False
+        assert "2 characters" in data["message"]
+    
+    def test_can_login_after_init_admin(self, client):
+        client.post("/api/setup-admin", json={"username": "admin", "password": "admin123456", "confirm_password": "admin123456"})
+        response = client.post("/token", data={"username": "admin", "password": "admin123456"})
+        assert response.status_code == 200
+    
+    def test_setup_admin_fails_when_users_exist(self, client, admin_user):
+        response = client.post("/api/setup-admin", json={"username": "admin2", "password": "pass123456", "confirm_password": "pass123456"})
+        assert response.status_code == 200
+        data = response.json()
+        assert data["success"] is False
     
     def test_reset_admin_with_custom_username_and_password(self, client, admin_user):
-        response = client.post("/api/reset-admin?username=teacher&password=teacher123&master_password=RESET-admin-2024")
+        response = client.post("/api/reset-admin", json={"username": "teacher", "password": "teacher123456", "master_password": "RESET-admin-2024"})
         assert response.status_code == 200
         data = response.json()
         assert data["success"] is True
         assert "teacher" in data["message"]
+        assert "access_token" in data
         
-        login = client.post("/token", data={"username": "teacher", "password": "teacher123"})
+        login = client.post("/token", data={"username": "teacher", "password": "teacher123456"})
         assert login.status_code == 200

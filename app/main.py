@@ -1,7 +1,7 @@
 from datetime import datetime, timedelta, date
 from typing import Optional
-from urllib.parse import quote
-from fastapi import FastAPI, Depends, HTTPException, status, Response
+from urllib.parse import quote, unquote
+from fastapi import FastAPI, Depends, HTTPException, status, Response, Request, Cookie
 from fastapi.security import OAuth2PasswordBearer, OAuth2PasswordRequestForm
 from starlette.staticfiles import StaticFiles
 from starlette.templating import Jinja2Templates
@@ -106,6 +106,27 @@ async def get_current_user(token: str = Depends(oauth2_scheme), db: Session = De
     return user
 
 
+async def get_page_user(request: Request, db: Session = Depends(get_db)):
+    token = request.cookies.get("student_tracker_token")
+    if not token:
+        auth_header = request.headers.get("authorization", "")
+        if auth_header.startswith("Bearer "):
+            token = auth_header[7:]
+    if not token:
+        return None
+    try:
+        payload = jwt.decode(token, settings.secret_key, algorithms=[settings.algorithm])
+        username: str = payload.get("sub")
+        if username is None:
+            return None
+    except JWTError:
+        return None
+    user = db.query(User).filter(User.username == username).first()
+    if user is None:
+        return None
+    return user
+
+
 class StudentCreate(BaseModel):
     name: str
     details: Optional[str] = None
@@ -134,12 +155,98 @@ class ActivityCreate(BaseModel):
     status: str  # yes, no
 
 
+@app.get("/")
+def home():
+    return templates.TemplateResponse("index.html", {"request": {}})
+
+
+@app.post("/api/logout")
+def logout(response: Response):
+    response.delete_cookie(key="student_tracker_token")
+    return {"success": True}
+
+
+@app.get("/api/setup-status")
+def setup_status(db: Session = Depends(get_db)):
+    admin_exists = db.query(User).first() is not None
+    return {"setup_required": not admin_exists}
+
+
+@app.get("/setup")
+def setup_page(db: Session = Depends(get_db)):
+    admin_exists = db.query(User).first() is not None
+    if admin_exists:
+        return RedirectResponse("/")
+    return templates.TemplateResponse("setup.html", {"request": {}})
+
+
+class SetupRequest(BaseModel):
+    username: str
+    password: str
+    confirm_password: str
+
+
+@app.post("/api/setup-admin")
+def setup_admin(request: SetupRequest, response: Response, db: Session = Depends(get_db)):
+    existing = db.query(User).first()
+    if existing:
+        return {"success": False, "message": "Admin user already exists. Use login instead."}
+    
+    if len(request.password) < 6:
+        return {"success": False, "message": "Password must be at least 6 characters"}
+    
+    if request.password != request.confirm_password:
+        return {"success": False, "message": "Passwords do not match"}
+    
+    if len(request.username) < 2:
+        return {"success": False, "message": "Username must be at least 2 characters"}
+    
+    admin = User(username=request.username, hashed_password=get_password_hash(request.password))
+    db.add(admin)
+    db.commit()
+    db.refresh(admin)
+    
+    access_token = create_access_token(data={"sub": admin.username}, expires_delta=timedelta(minutes=settings.access_token_expire_minutes))
+    response.set_cookie(key="student_tracker_token", value=access_token, httponly=True, max_age=settings.access_token_expire_minutes * 60)
+    return {"success": True, "message": f"Admin user created. Username: {admin.username}", "access_token": access_token, "token_type": "bearer"}
+
+
+class ResetRequest(BaseModel):
+    username: str
+    password: str
+    master_password: str
+
+
+@app.post("/api/reset-admin")
+def reset_admin(request: ResetRequest, response: Response, db: Session = Depends(get_db)):
+    if request.master_password != settings.master_password:
+        return {"success": False, "message": "Invalid master password"}
+    
+    if len(request.password) < 6:
+        return {"success": False, "message": "Password must be at least 6 characters"}
+    
+    if len(request.username) < 2:
+        return {"success": False, "message": "Username must be at least 2 characters"}
+    
+    db.query(User).delete()
+    db.commit()
+    
+    admin = User(username=request.username, hashed_password=get_password_hash(request.password))
+    db.add(admin)
+    db.commit()
+    
+    access_token = create_access_token(data={"sub": admin.username}, expires_delta=timedelta(minutes=settings.access_token_expire_minutes))
+    failed_login_attempts.pop(request.username, None)
+    response.set_cookie(key="student_tracker_token", value=access_token, httponly=True, max_age=settings.access_token_expire_minutes * 60)
+    
+    return {"success": True, "message": f"Admin reset. Username: {request.username}", "access_token": access_token, "token_type": "bearer"}
+
+
 @app.on_event("startup")
 def startup():
     Base.metadata.create_all(engine)
     db = get_session(engine)
     try:
-        # Add new columns if they don't exist (for existing databases)
         from sqlalchemy import text
         try:
             result = db.execute(text("PRAGMA table_info(students)"))
@@ -152,47 +259,30 @@ def startup():
         except Exception as e:
             db.rollback()
         
-        # Try to assign IDs - will fail gracefully if columns don't exist
         try:
             assign_missing_student_ids(db)
         except Exception:
-            pass  # Skip if columns don't exist yet
+            pass
     finally:
         db.close()
 
 
-@app.get("/")
-def home(db: Session = Depends(get_db)):
-    students = db.query(Student).all()
-    admin_exists = db.query(User).first() is not None
-    return templates.TemplateResponse("index.html", {"request": {}, "students": students, "admin_exists": admin_exists})
-
-
-@app.get("/setup")
-def setup_page(db: Session = Depends(get_db)):
-    admin_exists = db.query(User).first() is not None
-    if admin_exists:
-        return RedirectResponse("/")
-    return templates.TemplateResponse("setup.html", {"request": {}})
-
-
 @app.post("/token")
-def login(form_data: OAuth2PasswordRequestForm = Depends(), db: Session = Depends(get_db)):
+def login(response: Response, form_data: OAuth2PasswordRequestForm = Depends(), db: Session = Depends(get_db)):
     username = form_data.username
     password = form_data.password
     
     if username in failed_login_attempts and failed_login_attempts[username]["count"] >= 3:
-        if not password:
-            raise HTTPException(status_code=423, detail="Account locked. Use master password to reset.")
-        
         if password == settings.master_password:
             db.query(User).delete()
             db.commit()
-            new_admin = User(username="admin", hashed_password=get_password_hash("admin123"))
+            new_admin = User(username=username, hashed_password=get_password_hash(password))
             db.add(new_admin)
             db.commit()
             failed_login_attempts.pop(username, None)
-            return {"access_token": create_access_token(data={"sub": "admin"}), "token_type": "bearer", "message": "Admin reset to default (admin/admin123). Master password worked!"}
+            access_token = create_access_token(data={"sub": username}, expires_delta=timedelta(minutes=settings.access_token_expire_minutes))
+            response.set_cookie(key="student_tracker_token", value=access_token, httponly=True, max_age=settings.access_token_expire_minutes * 60)
+            return {"access_token": access_token, "token_type": "bearer", "message": f"Account reset. Logged in as {username}."}
         
         failed_login_attempts[username]["count"] += 1
         remaining = 3 - failed_login_attempts[username]["count"]
@@ -211,6 +301,7 @@ def login(form_data: OAuth2PasswordRequestForm = Depends(), db: Session = Depend
     
     failed_login_attempts.pop(username, None)
     access_token = create_access_token(data={"sub": user.username}, expires_delta=timedelta(minutes=settings.access_token_expire_minutes))
+    response.set_cookie(key="student_tracker_token", value=access_token, httponly=True, max_age=settings.access_token_expire_minutes * 60)
     return {"access_token": access_token, "token_type": "bearer"}
 
 
@@ -301,13 +392,18 @@ def get_student_report(student_name: str, db: Session = Depends(get_db), current
 
 
 @app.get("/students")
-def list_students_page(db: Session = Depends(get_db)):
+def list_students_page(db: Session = Depends(get_db), current_user: Optional[User] = Depends(get_page_user)):
+    if current_user is None:
+        return RedirectResponse(url="/", status_code=302)
     students = db.query(Student).order_by(Student.name).all()
     return templates.TemplateResponse("students.html", {"request": {}, "students": students})
 
 
 @app.get("/student/{student_name}")
-def student_dashboard(student_name: str, db: Session = Depends(get_db)):
+def student_dashboard(student_name: str, db: Session = Depends(get_db), current_user: Optional[User] = Depends(get_page_user)):
+    if current_user is None:
+        return RedirectResponse(url="/", status_code=302)
+    student_name = unquote(student_name)
     student, error = resolve_student(db, student_name)
     if error:
         student = db.query(Student).filter(Student.name == student_name).first()
@@ -544,17 +640,6 @@ def delete_student(student_identifier: str, db: Session = Depends(get_db), curre
     return {"success": True, "message": f"Deleted student {student.name} (ID: {student.student_id}) and all related records"}
 
 
-@app.post("/api/setup-admin")
-def setup_admin(username: str = "admin", password: str = "admin", db: Session = Depends(get_db)):
-    existing = db.query(User).filter(User.username == username).first()
-    if existing:
-        return {"success": False, "message": "Admin user already exists"}
-    admin = User(username=username, hashed_password=get_password_hash(password))
-    db.add(admin)
-    db.commit()
-    return {"success": True, "message": f"Admin user created. Username: {username}, Password: {password}"}
-
-
 class CommandRequest(BaseModel):
     command: str
 
@@ -750,17 +835,9 @@ def execute_command(request: CommandRequest, db: Session = Depends(get_db), curr
         return {"success": True, "action": "redirect", "url": "/students"}
 
 
-@app.post("/api/init-admin")
-def init_admin(username: str = "admin", password: str = "admin123", db: Session = Depends(get_db)):
-    existing = db.query(User).filter(User.username == username).first()
-    if existing:
-        return {"success": False, "message": f"User '{username}' already exists"}
-    admin = User(username=username, hashed_password=get_password_hash(password))
-    db.add(admin)
-    db.commit()
-    return {"success": True, "message": f"Admin created. Username: {username}, Password: {password}"}
-
-
+if __name__ == "__main__":
+    import uvicorn
+    uvicorn.run(app, host="0.0.0.0", port=8000)
 @app.get("/api/students/{student_name}/report/pdf")
 @app.post("/api/students/{student_name}/report/pdf")
 def generate_pdf(student_name: str, date_from: str = None, date_to: str = None, db: Session = Depends(get_db), current_user: User = Depends(get_current_user)):
@@ -808,20 +885,6 @@ def generate_pdf(student_name: str, date_from: str = None, date_to: str = None, 
     pdf_content = generate_pdf_report(student, grades, behaviors, attendances, homeworks, activities, avg_grade, date_range)
     
     return Response(content=pdf_content, media_type="application/pdf", headers={"Content-Disposition": f"attachment; filename=report_{student_name}.pdf"})
-
-
-@app.post("/api/reset-admin")
-def reset_admin(username: str = "admin", password: str = "admin123", master_password: str = "", db: Session = Depends(get_db)):
-    if master_password != settings.master_password:
-        return {"success": False, "message": "Invalid master password"}
-    
-    db.query(User).delete()
-    db.commit()
-    
-    admin = User(username=username, hashed_password=get_password_hash(password))
-    db.add(admin)
-    db.commit()
-    return {"success": True, "message": f"Admin reset. Username: {username}, Password: {password}"}
 
 
 if __name__ == "__main__":

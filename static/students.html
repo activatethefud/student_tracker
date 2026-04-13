@@ -129,20 +129,28 @@
         
         async function resetWithMaster() {
             const username = document.getElementById('login-username').value;
+            const password = document.getElementById('login-password').value || 'resetpassword';
             const masterPassword = document.getElementById('master-password').value;
             
             try {
-                const response = await fetch('/api/reset-admin?username=' + encodeURIComponent(username) + '&master_password=' + encodeURIComponent(masterPassword), {
-                    method: 'POST'
+                const response = await fetch('/api/reset-admin', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                        username: username,
+                        password: password,
+                        master_password: masterPassword
+                    })
                 });
                 const data = await response.json();
                 
                 if (data.success) {
-                    const parts = data.message.match(/Username: (\w+), Password: (\w+)/);
-                    if (parts) {
-                        document.getElementById('login-password').value = parts[2];
-                        document.getElementById('login-form').dispatchEvent(new Event('submit'));
+                    if (data.access_token) {
+                        authToken = data.access_token;
+                        localStorage.setItem('student_tracker_token', authToken);
                     }
+                    hideLogin();
+                    location.reload();
                 } else {
                     document.getElementById('login-error').textContent = data.message || 'Reset failed';
                     document.getElementById('login-error').classList.remove('hidden');
@@ -156,8 +164,9 @@
         function logout() {
             authToken = null;
             localStorage.removeItem('student_tracker_token');
-            document.getElementById('auth-section').innerHTML = '<button onclick="showLogin()" class="text-blue-500 hover:underline text-sm sm:text-base">Login</button>';
-            location.reload();
+            fetch('/api/logout', { method: 'POST' }).then(() => {
+                window.location.href = '/';
+            });
         }
         
         if (authToken) {

@@ -8,7 +8,7 @@ from app.models import Base, Student, User
 import bcrypt
 
 
-TEST_DATABASE_URL = "sqlite:///./test_auth.db"
+TEST_DATABASE_URL = "sqlite:///./test_api.db"
 engine = create_engine(TEST_DATABASE_URL, connect_args={"check_same_thread": False})
 TestingSessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=engine)
 
@@ -195,20 +195,56 @@ class TestAuthCommandEndpoint:
 
 
 class TestInitAdmin:
-    def test_init_admin_works(self, client):
-        response = client.post("/api/init-admin?username=newadmin&password=newpass123")
+    def test_setup_admin_creates_first_user(self, client):
+        response = client.post("/api/setup-admin", json={"username": "newadmin", "password": "newpass123", "confirm_password": "newpass123"})
         assert response.status_code == 200
-        assert response.json()["success"] is True
+        data = response.json()
+        assert data["success"] is True
+        assert "access_token" in data
     
-    def test_init_admin_fails_for_existing_user(self, client, admin_user):
-        response = client.post("/api/init-admin?username=admin&password=pass")
+    def test_setup_admin_fails_with_existing_user(self, client, admin_user):
+        response = client.post("/api/setup-admin", json={"username": "another", "password": "pass123456", "confirm_password": "pass123456"})
         assert response.status_code == 200
-        assert response.json()["success"] is False
+        data = response.json()
+        assert data["success"] is False
     
-    def test_can_login_after_init_admin(self, client):
-        client.post("/api/init-admin?username=testuser&password=testpass")
-        response = client.post("/token", data={"username": "testuser", "password": "testpass"})
+    def test_setup_admin_short_password(self, client):
+        response = client.post("/api/setup-admin", json={"username": "admin", "password": "123", "confirm_password": "123"})
         assert response.status_code == 200
+        data = response.json()
+        assert data["success"] is False
+        assert "6 characters" in data["message"]
+    
+    def test_setup_admin_password_mismatch(self, client):
+        response = client.post("/api/setup-admin", json={"username": "admin", "password": "password123", "confirm_password": "different123"})
+        assert response.status_code == 200
+        data = response.json()
+        assert data["success"] is False
+        assert "do not match" in data["message"]
+    
+    def test_setup_admin_short_username(self, client):
+        response = client.post("/api/setup-admin", json={"username": "a", "password": "password123", "confirm_password": "password123"})
+        assert response.status_code == 200
+        data = response.json()
+        assert data["success"] is False
+        assert "2 characters" in data["message"]
+    
+    def test_can_login_after_setup_admin(self, client):
+        client.post("/api/setup-admin", json={"username": "testuser", "password": "testpass123", "confirm_password": "testpass123"})
+        response = client.post("/token", data={"username": "testuser", "password": "testpass123"})
+        assert response.status_code == 200
+    
+    def test_setup_status_no_admin(self, client):
+        response = client.get("/api/setup-status")
+        assert response.status_code == 200
+        data = response.json()
+        assert data["setup_required"] is True
+    
+    def test_setup_status_with_admin(self, client, admin_user):
+        response = client.get("/api/setup-status")
+        assert response.status_code == 200
+        data = response.json()
+        assert data["setup_required"] is False
 
 
 class TestSetupPage:

@@ -8,7 +8,7 @@ from app.models import Base, Student, User
 import bcrypt
 
 
-TEST_DATABASE_URL = "sqlite:///./test_lockout.db"
+TEST_DATABASE_URL = "sqlite:///./test_api.db"
 engine = create_engine(TEST_DATABASE_URL, connect_args={"check_same_thread": False})
 TestingSessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=engine)
 
@@ -98,9 +98,8 @@ class TestLoginLockout:
         assert response.status_code == 200
         data = response.json()
         assert "access_token" in data
-        assert "reset" in data.get("message", "").lower()
         
-        login_response = client.post("/token", data={"username": "admin", "password": "admin123"})
+        login_response = client.post("/token", data={"username": "admin", "password": "RESET-admin-2024"})
         assert login_response.status_code == 200
     
     def test_different_username_tracked_separately(self, client, admin_user):

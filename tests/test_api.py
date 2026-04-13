@@ -77,10 +77,11 @@ def student(db):
 
 class TestSetupAdmin:
     def test_setup_admin(self, client):
-        response = client.post("/api/init-admin?username=admin&password=pass")
+        response = client.post("/api/setup-admin", json={"username": "admin", "password": "password123", "confirm_password": "password123"})
         assert response.status_code == 200
         data = response.json()
         assert data["success"] is True
+        assert "access_token" in data
         assert "admin" in data["message"]
 
 
@@ -268,16 +269,29 @@ class TestCommandAPI:
         assert "not found" in data["message"].lower()
 
 
-class TestInitAdmin:
-    def test_init_admin_creates_user(self, client, db):
-        response = client.post("/api/init-admin?username=teacher&password=teach123")
+class TestSetupAdmin:
+    def test_setup_admin_creates_user(self, client, db):
+        response = client.post("/api/setup-admin", json={"username": "teacher", "password": "teach123456", "confirm_password": "teach123456"})
         assert response.status_code == 200
         data = response.json()
         assert data["success"] is True
         assert "teacher" in data["message"]
+        assert "access_token" in data
     
-    def test_init_admin_fails_if_exists(self, client, db, admin_user):
-        response = client.post("/api/init-admin?username=admin&password=pass123")
+    def test_setup_admin_fails_if_exists(self, client, db, admin_user):
+        response = client.post("/api/setup-admin", json={"username": "admin2", "password": "pass123456", "confirm_password": "pass123456"})
+        assert response.status_code == 200
+        data = response.json()
+        assert data["success"] is False
+    
+    def test_setup_admin_short_password(self, client, db):
+        response = client.post("/api/setup-admin", json={"username": "newuser", "password": "123", "confirm_password": "123"})
+        assert response.status_code == 200
+        data = response.json()
+        assert data["success"] is False
+    
+    def test_setup_admin_password_mismatch(self, client, db):
+        response = client.post("/api/setup-admin", json={"username": "newuser", "password": "password123", "confirm_password": "different123"})
         assert response.status_code == 200
         data = response.json()
         assert data["success"] is False
@@ -393,7 +407,7 @@ class TestDashboardAPI:
             headers={"Authorization": f"Bearer {token}"}
         )
         
-        response = client.get("/student/Marko%20Stefanovic")
+        response = client.get("/student/Marko%20Stefanovic", headers={"Authorization": f"Bearer {token}"})
         assert response.status_code == 200
         assert "Marko Stefanovic" in response.text
     
@@ -565,13 +579,35 @@ class TestDashboardAPI:
         assert student.name == "Johnny"
         assert student.details == "Updated details"
     
-    def test_students_page_loads_without_auth(self, client):
-        response = client.get("/students")
-        assert response.status_code == 200
+    def test_students_page_requires_auth(self, client):
+        response = client.get("/students", follow_redirects=False)
+        assert response.status_code == 302
+        assert response.headers["location"] == "/"
     
-    def test_student_dashboard_loads_without_auth(self, client):
-        response = client.get("/student/John")
-        assert response.status_code in [200, 404]
+    def test_student_dashboard_requires_auth(self, client):
+        response = client.get("/student/John", follow_redirects=False)
+        assert response.status_code == 302
+        assert response.headers["location"] == "/"
+    
+    def test_students_page_accessible_with_cookie(self, client, admin_user, student):
+        login = client.post("/token", data={"username": "admin", "password": "test"})
+        assert login.status_code == 200
+        response = client.get("/students", follow_redirects=False)
+        assert response.status_code == 200
+        assert "John" in response.text
+    
+    def test_student_dashboard_accessible_with_cookie(self, client, admin_user, student):
+        login = client.post("/token", data={"username": "admin", "password": "test"})
+        assert login.status_code == 200
+        response = client.get("/student/John", follow_redirects=False)
+        assert response.status_code == 200
+        assert "John" in response.text
+    
+    def test_logout_endpoint(self, client, admin_user):
+        login = client.post("/token", data={"username": "admin", "password": "test"})
+        assert login.status_code == 200
+        response = client.post("/api/logout")
+        assert response.status_code == 200
     
     def test_delete_nonexistent_grade_returns_404(self, client, admin_user):
         login = client.post("/token", data={"username": "admin", "password": "test"})
