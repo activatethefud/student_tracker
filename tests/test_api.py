@@ -355,3 +355,144 @@ class TestHomeworkAPI:
         )
         data = response.json()
         assert "Homework" in data["message"]
+
+
+class TestDashboardAPI:
+    def test_get_students_list(self, client, admin_user, student, db):
+        login = client.post("/token", data={"username": "admin", "password": "test"})
+        token = login.json()["access_token"]
+        
+        response = client.get("/students", headers={"Authorization": f"Bearer {token}"})
+        assert response.status_code == 200
+        assert "John" in response.text
+    
+    def test_get_student_dashboard(self, client, admin_user, student, db):
+        login = client.post("/token", data={"username": "admin", "password": "test"})
+        token = login.json()["access_token"]
+        
+        response = client.get("/student/John", headers={"Authorization": f"Bearer {token}"})
+        assert response.status_code == 200
+        assert "John" in response.text
+        assert "Grades" in response.text
+    
+    def test_get_student_dashboard_not_found(self, client, admin_user):
+        login = client.post("/token", data={"username": "admin", "password": "test"})
+        token = login.json()["access_token"]
+        
+        response = client.get("/student/NonExistent", headers={"Authorization": f"Bearer {token}"})
+        assert response.status_code == 404
+    
+    def test_delete_grade(self, client, admin_user, student, db):
+        login = client.post("/token", data={"username": "admin", "password": "test"})
+        token = login.json()["access_token"]
+        
+        grade_response = client.post(
+            "/api/command",
+            json={"command": "/grade John 90 --subject Math"},
+            headers={"Authorization": f"Bearer {token}"}
+        )
+        
+        from app.models import Grade
+        grade = db.query(Grade).filter(Grade.student_id == student.id).first()
+        
+        response = client.delete(f"/api/grades/{grade.id}", headers={"Authorization": f"Bearer {token}"})
+        assert response.status_code == 200
+        assert response.json()["success"] is True
+    
+    def test_delete_behavior(self, client, admin_user, student, db):
+        login = client.post("/token", data={"username": "admin", "password": "test"})
+        token = login.json()["access_token"]
+        
+        from app.models import Behavior
+        behavior = Behavior(student_id=student.id, note="Test", behavior_type="positive")
+        db.add(behavior)
+        db.commit()
+        
+        response = client.delete(f"/api/behaviors/{behavior.id}", headers={"Authorization": f"Bearer {token}"})
+        assert response.status_code == 200
+    
+    def test_delete_attendance(self, client, admin_user, student, db):
+        login = client.post("/token", data={"username": "admin", "password": "test"})
+        token = login.json()["access_token"]
+        
+        from app.models import Attendance
+        from datetime import date
+        attendance = Attendance(student_id=student.id, status="present", date=date.today())
+        db.add(attendance)
+        db.commit()
+        
+        response = client.delete(f"/api/attendance/{attendance.id}", headers={"Authorization": f"Bearer {token}"})
+        assert response.status_code == 200
+    
+    def test_delete_homework(self, client, admin_user, student, db):
+        login = client.post("/token", data={"username": "admin", "password": "test"})
+        token = login.json()["access_token"]
+        
+        from app.models import Homework
+        homework = Homework(student_id=student.id, title="Test", status="pending")
+        db.add(homework)
+        db.commit()
+        
+        response = client.delete(f"/api/homework/{homework.id}", headers={"Authorization": f"Bearer {token}"})
+        assert response.status_code == 200
+    
+    def test_delete_student_cascade(self, client, admin_user, student, db):
+        login = client.post("/token", data={"username": "admin", "password": "test"})
+        token = login.json()["access_token"]
+        
+        from app.models import Grade
+        grade = Grade(student_id=student.id, score=90, subject="Math")
+        db.add(grade)
+        db.commit()
+        
+        response = client.delete("/api/students/John", headers={"Authorization": f"Bearer {token}"})
+        assert response.status_code == 200
+        
+        from app.models import Student
+        assert db.query(Student).filter(Student.name == "John").first() is None
+    
+    def test_update_grade(self, client, admin_user, student, db):
+        login = client.post("/token", data={"username": "admin", "password": "test"})
+        token = login.json()["access_token"]
+        
+        from app.models import Grade
+        grade = Grade(student_id=student.id, score=90, subject="Math")
+        db.add(grade)
+        db.commit()
+        
+        response = client.put(
+            f"/api/grades/{grade.id}",
+            json={"score": 95, "subject": "Science"},
+            headers={"Authorization": f"Bearer {token}"}
+        )
+        assert response.status_code == 200
+        
+        db.refresh(grade)
+        assert grade.score == 95
+        assert grade.subject == "Science"
+    
+    def test_update_student_details(self, client, admin_user, student, db):
+        login = client.post("/token", data={"username": "admin", "password": "test"})
+        token = login.json()["access_token"]
+        
+        response = client.put(
+            "/api/students/John",
+            json={"name": "Johnny", "details": "Updated details"},
+            headers={"Authorization": f"Bearer {token}"}
+        )
+        assert response.status_code == 200
+        
+        db.refresh(student)
+        assert student.name == "Johnny"
+        assert student.details == "Updated details"
+    
+    def test_dashboard_requires_auth(self, client):
+        response = client.get("/students")
+        assert response.status_code == 401
+    
+    def test_delete_nonexistent_grade_returns_404(self, client, admin_user):
+        login = client.post("/token", data={"username": "admin", "password": "test"})
+        token = login.json()["access_token"]
+        
+        response = client.delete("/api/grades/99999", headers={"Authorization": f"Bearer {token}"})
+        assert response.status_code == 404

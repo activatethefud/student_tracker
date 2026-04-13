@@ -220,6 +220,205 @@ def get_student_report(student_name: str, db: Session = Depends(get_db), current
     }
 
 
+@app.get("/students")
+def list_students_page(db: Session = Depends(get_db), current_user: User = Depends(get_current_user)):
+    students = db.query(Student).order_by(Student.name).all()
+    return templates.TemplateResponse("students.html", {"request": {}, "students": students})
+
+
+@app.get("/student/{student_name}")
+def student_dashboard(student_name: str, db: Session = Depends(get_db), current_user: User = Depends(get_current_user)):
+    student = db.query(Student).filter(Student.name == student_name).first()
+    if not student:
+        raise HTTPException(status_code=404, detail=f"Student '{student_name}' not found")
+    
+    grades = student.grades
+    behaviors = student.behaviors
+    attendances = student.attendances
+    homeworks = student.homeworks
+    
+    avg_grade = sum(g.score for g in grades) / len(grades) if grades else 0
+    present = len([a for a in attendances if a.status == "present"])
+    total = len(attendances)
+    attendance_pct = round((present / total) * 100, 1) if total > 0 else 0
+    
+    pending_hw = len([h for h in homeworks if h.status.lower() == "pending"])
+    submitted_hw = len([h for h in homeworks if h.status.lower() == "submitted"])
+    other_hw = len(homeworks) - pending_hw - submitted_hw
+    
+    return templates.TemplateResponse("dashboard.html", {
+        "request": {},
+        "student": student,
+        "grades": grades,
+        "behaviors": behaviors,
+        "attendances": attendances,
+        "homeworks": homeworks,
+        "avg_grade": round(avg_grade, 2),
+        "attendance_pct": attendance_pct,
+        "pending_hw": pending_hw,
+        "submitted_hw": submitted_hw,
+        "other_hw": other_hw
+    })
+
+
+class GradeUpdate(BaseModel):
+    score: Optional[float] = None
+    subject: Optional[str] = None
+
+
+@app.put("/api/grades/{grade_id}")
+def update_grade(grade_id: int, update: GradeUpdate, db: Session = Depends(get_db), current_user: User = Depends(get_current_user)):
+    grade = db.query(Grade).filter(Grade.id == grade_id).first()
+    if not grade:
+        raise HTTPException(status_code=404, detail="Grade not found")
+    
+    if update.score is not None:
+        grade.score = update.score
+    if update.subject is not None:
+        grade.subject = update.subject
+    
+    db.commit()
+    return {"success": True, "message": f"Updated grade {grade_id}"}
+
+
+@app.delete("/api/grades/{grade_id}")
+def delete_grade(grade_id: int, db: Session = Depends(get_db), current_user: User = Depends(get_current_user)):
+    grade = db.query(Grade).filter(Grade.id == grade_id).first()
+    if not grade:
+        raise HTTPException(status_code=404, detail="Grade not found")
+    
+    db.delete(grade)
+    db.commit()
+    return {"success": True, "message": f"Deleted grade {grade_id}"}
+
+
+class BehaviorUpdate(BaseModel):
+    note: Optional[str] = None
+    behavior_type: Optional[str] = None
+
+
+@app.put("/api/behaviors/{behavior_id}")
+def update_behavior(behavior_id: int, update: BehaviorUpdate, db: Session = Depends(get_db), current_user: User = Depends(get_current_user)):
+    behavior = db.query(Behavior).filter(Behavior.id == behavior_id).first()
+    if not behavior:
+        raise HTTPException(status_code=404, detail="Behavior not found")
+    
+    if update.note is not None:
+        behavior.note = update.note
+    if update.behavior_type is not None:
+        behavior.behavior_type = update.behavior_type
+    
+    db.commit()
+    return {"success": True, "message": f"Updated behavior {behavior_id}"}
+
+
+@app.delete("/api/behaviors/{behavior_id}")
+def delete_behavior(behavior_id: int, db: Session = Depends(get_db), current_user: User = Depends(get_current_user)):
+    behavior = db.query(Behavior).filter(Behavior.id == behavior_id).first()
+    if not behavior:
+        raise HTTPException(status_code=404, detail="Behavior not found")
+    
+    db.delete(behavior)
+    db.commit()
+    return {"success": True, "message": f"Deleted behavior {behavior_id}"}
+
+
+class AttendanceUpdate(BaseModel):
+    status: Optional[str] = None
+    date: Optional[str] = None
+
+
+@app.put("/api/attendance/{attendance_id}")
+def update_attendance(attendance_id: int, update: AttendanceUpdate, db: Session = Depends(get_db), current_user: User = Depends(get_current_user)):
+    attendance = db.query(Attendance).filter(Attendance.id == attendance_id).first()
+    if not attendance:
+        raise HTTPException(status_code=404, detail="Attendance not found")
+    
+    if update.status is not None:
+        attendance.status = update.status
+    if update.date is not None:
+        attendance.date = datetime.strptime(update.date, "%Y-%m-%d").date()
+    
+    db.commit()
+    return {"success": True, "message": f"Updated attendance {attendance_id}"}
+
+
+@app.delete("/api/attendance/{attendance_id}")
+def delete_attendance(attendance_id: int, db: Session = Depends(get_db), current_user: User = Depends(get_current_user)):
+    attendance = db.query(Attendance).filter(Attendance.id == attendance_id).first()
+    if not attendance:
+        raise HTTPException(status_code=404, detail="Attendance not found")
+    
+    db.delete(attendance)
+    db.commit()
+    return {"success": True, "message": f"Deleted attendance {attendance_id}"}
+
+
+class HomeworkUpdate(BaseModel):
+    title: Optional[str] = None
+    status: Optional[str] = None
+    due_date: Optional[str] = None
+
+
+@app.put("/api/homework/{homework_id}")
+def update_homework(homework_id: int, update: HomeworkUpdate, db: Session = Depends(get_db), current_user: User = Depends(get_current_user)):
+    homework = db.query(Homework).filter(Homework.id == homework_id).first()
+    if not homework:
+        raise HTTPException(status_code=404, detail="Homework not found")
+    
+    if update.title is not None:
+        homework.title = update.title
+    if update.status is not None:
+        homework.status = update.status
+    if update.due_date is not None:
+        homework.due_date = datetime.strptime(update.due_date, "%Y-%m-%d").date()
+    
+    db.commit()
+    return {"success": True, "message": f"Updated homework {homework_id}"}
+
+
+@app.delete("/api/homework/{homework_id}")
+def delete_homework(homework_id: int, db: Session = Depends(get_db), current_user: User = Depends(get_current_user)):
+    homework = db.query(Homework).filter(Homework.id == homework_id).first()
+    if not homework:
+        raise HTTPException(status_code=404, detail="Homework not found")
+    
+    db.delete(homework)
+    db.commit()
+    return {"success": True, "message": f"Deleted homework {homework_id}"}
+
+
+class StudentUpdate(BaseModel):
+    name: Optional[str] = None
+    details: Optional[str] = None
+
+
+@app.put("/api/students/{student_name}")
+def update_student(student_name: str, update: StudentUpdate, db: Session = Depends(get_db), current_user: User = Depends(get_current_user)):
+    student = db.query(Student).filter(Student.name == student_name).first()
+    if not student:
+        raise HTTPException(status_code=404, detail="Student not found")
+    
+    if update.name is not None:
+        student.name = update.name
+    if update.details is not None:
+        student.details = update.details
+    
+    db.commit()
+    return {"success": True, "message": f"Updated student {student_name}"}
+
+
+@app.delete("/api/students/{student_name}")
+def delete_student(student_name: str, db: Session = Depends(get_db), current_user: User = Depends(get_current_user)):
+    student = db.query(Student).filter(Student.name == student_name).first()
+    if not student:
+        raise HTTPException(status_code=404, detail="Student not found")
+    
+    db.delete(student)
+    db.commit()
+    return {"success": True, "message": f"Deleted student {student_name} and all related records"}
+
+
 @app.post("/api/setup-admin")
 def setup_admin(username: str = "admin", password: str = "admin", db: Session = Depends(get_db)):
     existing = db.query(User).filter(User.username == username).first()

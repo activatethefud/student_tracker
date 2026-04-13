@@ -1,0 +1,468 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>{{ student.name }} - Student Tracker</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <style>
+        body { background-color: #f3f4f6; }
+    </style>
+</head>
+<body class="p-2 sm:p-3 md:p-4">
+    <div class="max-w-sm sm:max-w-md md:max-w-2xl lg:max-w-4xl mx-auto space-y-4">
+        <div class="flex flex-col sm:flex-row sm:justify-between sm:items-center gap-2">
+            <a href="/students" class="text-blue-500 hover:underline text-sm sm:text-base">← All Students</a>
+            <button onclick="showStudentEditModal()" class="text-sm text-gray-500 hover:text-gray-700">Edit Student</button>
+        </div>
+        
+        <div class="bg-white rounded-lg shadow-lg p-4 sm:p-6">
+            <div class="flex flex-col sm:flex-row sm:justify-between sm:items-start gap-3 mb-4">
+                <div>
+                    <h1 class="text-2xl sm:text-3xl font-bold">{{ student.name }}</h1>
+                    {% if student.details %}
+                    <p class="text-gray-500 mt-1 text-sm">{{ student.details }}</p>
+                    {% endif %}
+                </div>
+                <button onclick="confirmDeleteStudent()" id="delete-student-btn" 
+                        class="px-3 py-1 bg-red-500 text-white rounded hover:bg-red-600 text-sm whitespace-nowrap">
+                    Delete Student
+                </button>
+            </div>
+            
+            <div class="grid grid-cols-2 sm:grid-cols-4 gap-3 mb-6">
+                <div class="bg-blue-50 p-3 rounded text-center">
+                    <div class="text-2xl font-bold text-blue-600">{{ avg_grade }}</div>
+                    <div class="text-xs text-gray-500">Avg Grade</div>
+                </div>
+                <div class="bg-green-50 p-3 rounded text-center">
+                    <div class="text-2xl font-bold text-green-600">{{ attendance_pct }}%</div>
+                    <div class="text-xs text-gray-500">Attendance</div>
+                </div>
+                <div class="bg-yellow-50 p-3 rounded text-center">
+                    <div class="text-2xl font-bold text-yellow-600">{{ pending_hw }}</div>
+                    <div class="text-xs text-gray-500">Pending HW</div>
+                </div>
+                <div class="bg-purple-50 p-3 rounded text-center">
+                    <div class="text-2xl font-bold text-purple-600">{{ submitted_hw }}</div>
+                    <div class="text-xs text-gray-500">Submitted HW</div>
+                </div>
+            </div>
+        </div>
+        
+        <div class="bg-white rounded-lg shadow-lg p-4 sm:p-6">
+            <div class="flex justify-between items-center mb-4">
+                <h2 class="text-lg font-bold">Grades</h2>
+                <span class="text-sm text-gray-500">{{ grades|length }} records</span>
+            </div>
+            {% if grades %}
+            <div class="overflow-x-auto">
+                <table class="w-full text-sm">
+                    <thead class="bg-gray-50">
+                        <tr>
+                            <th class="px-3 py-2 text-left">Subject</th>
+                            <th class="px-3 py-2 text-left">Score</th>
+                            <th class="px-3 py-2 text-left">Date</th>
+                            <th class="px-3 py-2 text-right">Actions</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {% for grade in grades %}
+                        <tr class="border-t">
+                            <td class="px-3 py-2">{{ grade.subject }}</td>
+                            <td class="px-3 py-2 font-medium">{{ grade.score }}</td>
+                            <td class="px-3 py-2 text-gray-500">{{ grade.created_at.strftime('%Y-%m-%d') }}</td>
+                            <td class="px-3 py-2 text-right">
+                                <button onclick="showEditModal('grade', {{ grade.id }}, {{ grade.score }}, '{{ grade.subject }}')" 
+                                        class="text-blue-500 hover:underline mr-2">Edit</button>
+                                <button onclick="confirmDelete('grade', {{ grade.id }}, 'delete-grade-btn-{{ grade.id }}')" 
+                                        id="delete-grade-btn-{{ grade.id }}"
+                                        class="text-red-500 hover:underline">Delete</button>
+                            </td>
+                        </tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+            </div>
+            {% else %}
+            <p class="text-gray-500 text-center py-4">No grades recorded</p>
+            {% endif %}
+        </div>
+        
+        <div class="bg-white rounded-lg shadow-lg p-4 sm:p-6">
+            <div class="flex justify-between items-center mb-4">
+                <h2 class="text-lg font-bold">Behaviors</h2>
+                <span class="text-sm text-gray-500">{{ behaviors|length }} records</span>
+            </div>
+            {% if behaviors %}
+            <div class="overflow-x-auto">
+                <table class="w-full text-sm">
+                    <thead class="bg-gray-50">
+                        <tr>
+                            <th class="px-3 py-2 text-left">Type</th>
+                            <th class="px-3 py-2 text-left">Note</th>
+                            <th class="px-3 py-2 text-left">Date</th>
+                            <th class="px-3 py-2 text-right">Actions</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {% for behavior in behaviors %}
+                        <tr class="border-t">
+                            <td class="px-3 py-2">
+                                <span class="px-2 py-1 rounded text-xs font-medium
+                                    {% if behavior.behavior_type == 'positive' %}bg-green-100 text-green-800
+                                    {% elif behavior.behavior_type == 'negative' %}bg-red-100 text-red-800
+                                    {% else %}bg-gray-100 text-gray-800{% endif %}">
+                                    {{ behavior.behavior_type }}
+                                </span>
+                            </td>
+                            <td class="px-3 py-2">{{ behavior.note }}</td>
+                            <td class="px-3 py-2 text-gray-500">{{ behavior.created_at.strftime('%Y-%m-%d') }}</td>
+                            <td class="px-3 py-2 text-right">
+                                <button onclick="showEditModal('behavior', {{ behavior.id }}, null, null, '{{ behavior.behavior_type }}', '{{ behavior.note }}')" 
+                                        class="text-blue-500 hover:underline mr-2">Edit</button>
+                                <button onclick="confirmDelete('behavior', {{ behavior.id }}, 'delete-behavior-btn-{{ behavior.id }}')" 
+                                        id="delete-behavior-btn-{{ behavior.id }}"
+                                        class="text-red-500 hover:underline">Delete</button>
+                            </td>
+                        </tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+            </div>
+            {% else %}
+            <p class="text-gray-500 text-center py-4">No behaviors recorded</p>
+            {% endif %}
+        </div>
+        
+        <div class="bg-white rounded-lg shadow-lg p-4 sm:p-6">
+            <div class="flex justify-between items-center mb-4">
+                <h2 class="text-lg font-bold">Attendance</h2>
+                <span class="text-sm text-gray-500">{{ attendances|length }} records</span>
+            </div>
+            {% if attendances %}
+            <div class="overflow-x-auto">
+                <table class="w-full text-sm">
+                    <thead class="bg-gray-50">
+                        <tr>
+                            <th class="px-3 py-2 text-left">Status</th>
+                            <th class="px-3 py-2 text-left">Date</th>
+                            <th class="px-3 py-2 text-right">Actions</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {% for attendance in attendances %}
+                        <tr class="border-t">
+                            <td class="px-3 py-2">
+                                <span class="px-2 py-1 rounded text-xs font-medium
+                                    {% if attendance.status == 'present' %}bg-green-100 text-green-800
+                                    {% elif attendance.status == 'absent' %}bg-red-100 text-red-800
+                                    {% else %}bg-yellow-100 text-yellow-800{% endif %}">
+                                    {{ attendance.status }}
+                                </span>
+                            </td>
+                            <td class="px-3 py-2 text-gray-500">{{ attendance.date.strftime('%Y-%m-%d') }}</td>
+                            <td class="px-3 py-2 text-right">
+                                <button onclick="showEditModal('attendance', {{ attendance.id }}, null, null, null, null, '{{ attendance.status }}', '{{ attendance.date.strftime('%Y-%m-%d') }}')" 
+                                        class="text-blue-500 hover:underline mr-2">Edit</button>
+                                <button onclick="confirmDelete('attendance', {{ attendance.id }}, 'delete-attendance-btn-{{ attendance.id }}')" 
+                                        id="delete-attendance-btn-{{ attendance.id }}"
+                                        class="text-red-500 hover:underline">Delete</button>
+                            </td>
+                        </tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+            </div>
+            {% else %}
+            <p class="text-gray-500 text-center py-4">No attendance records</p>
+            {% endif %}
+        </div>
+        
+        <div class="bg-white rounded-lg shadow-lg p-4 sm:p-6">
+            <div class="flex justify-between items-center mb-4">
+                <h2 class="text-lg font-bold">Homework</h2>
+                <span class="text-sm text-gray-500">{{ homeworks|length }} records</span>
+            </div>
+            {% if homeworks %}
+            <div class="overflow-x-auto">
+                <table class="w-full text-sm">
+                    <thead class="bg-gray-50">
+                        <tr>
+                            <th class="px-3 py-2 text-left">Title</th>
+                            <th class="px-3 py-2 text-left">Status</th>
+                            <th class="px-3 py-2 text-left">Due Date</th>
+                            <th class="px-3 py-2 text-right">Actions</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {% for homework in homeworks %}
+                        <tr class="border-t">
+                            <td class="px-3 py-2">{{ homework.title }}</td>
+                            <td class="px-3 py-2">
+                                <span class="px-2 py-1 rounded text-xs font-medium
+                                    {% if homework.status.lower() == 'pending' %}bg-yellow-100 text-yellow-800
+                                    {% elif homework.status.lower() == 'submitted' %}bg-green-100 text-green-800
+                                    {% else %}bg-gray-100 text-gray-800{% endif %}">
+                                    {{ homework.status }}
+                                </span>
+                            </td>
+                            <td class="px-3 py-2 text-gray-500">
+                                {% if homework.due_date %}{{ homework.due_date.strftime('%Y-%m-%d') }}{% else %}-{% endif %}
+                            </td>
+                            <td class="px-3 py-2 text-right">
+                                <button onclick="showEditModal('homework', {{ homework.id }}, null, null, null, null, null, null, '{{ homework.title }}', '{{ homework.status }}', '{% if homework.due_date %}{{ homework.due_date.strftime('%Y-%m-%d') }}{% endif %}')" 
+                                        class="text-blue-500 hover:underline mr-2">Edit</button>
+                                <button onclick="confirmDelete('homework', {{ homework.id }}, 'delete-homework-btn-{{ homework.id }}')" 
+                                        id="delete-homework-btn-{{ homework.id }}"
+                                        class="text-red-500 hover:underline">Delete</button>
+                            </td>
+                        </tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+            </div>
+            {% else %}
+            <p class="text-gray-500 text-center py-4">No homework assigned</p>
+            {% endif %}
+        </div>
+    </div>
+    
+    <div id="edit-modal" class="hidden fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
+        <div class="bg-white rounded-lg p-6 max-w-md w-full max-h-[90vh] overflow-y-auto">
+            <h2 class="text-xl font-bold mb-4" id="edit-modal-title">Edit</h2>
+            <form id="edit-form">
+                <input type="hidden" id="edit-type">
+                <input type="hidden" id="edit-id">
+                <div id="edit-fields" class="space-y-4"></div>
+                <div class="flex gap-2 mt-6">
+                    <button type="submit" class="flex-1 bg-blue-500 text-white py-2 rounded hover:bg-blue-600">Save</button>
+                    <button type="button" onclick="hideEditModal()" class="px-4 py-2 border rounded">Cancel</button>
+                </div>
+            </form>
+        </div>
+    </div>
+    
+    <script>
+        let authToken = localStorage.getItem('student_tracker_token');
+        
+        function showStudentEditModal() {
+            document.getElementById('edit-modal-title').textContent = 'Edit Student';
+            document.getElementById('edit-type').value = 'student';
+            document.getElementById('edit-id').value = '{{ student.name }}';
+            document.getElementById('edit-fields').innerHTML = `
+                <div>
+                    <label class="block text-sm font-medium mb-1">Name</label>
+                    <input type="text" id="edit-name" value="{{ student.name }}" class="w-full border rounded px-3 py-2">
+                </div>
+                <div>
+                    <label class="block text-sm font-medium mb-1">Details</label>
+                    <textarea id="edit-details" class="w-full border rounded px-3 py-2" rows="2">{% if student.details %}{{ student.details }}{% endif %}</textarea>
+                </div>
+            `;
+            document.getElementById('edit-modal').classList.remove('hidden');
+        }
+        
+        function showEditModal(type, id, score, subject, behaviorType, note, status, date, title, homeworkStatus, dueDate) {
+            document.getElementById('edit-modal-title').textContent = 'Edit ' + type.charAt(0).toUpperCase() + type.slice(1);
+            document.getElementById('edit-type').value = type;
+            document.getElementById('edit-id').value = id;
+            
+            let fields = '';
+            if (type === 'grade') {
+                fields = `
+                    <div>
+                        <label class="block text-sm font-medium mb-1">Score</label>
+                        <input type="number" step="0.01" id="edit-score" value="${score}" class="w-full border rounded px-3 py-2">
+                    </div>
+                    <div>
+                        <label class="block text-sm font-medium mb-1">Subject</label>
+                        <input type="text" id="edit-subject" value="${subject || ''}" class="w-full border rounded px-3 py-2">
+                    </div>
+                `;
+            } else if (type === 'behavior') {
+                fields = `
+                    <div>
+                        <label class="block text-sm font-medium mb-1">Type</label>
+                        <select id="edit-behavior-type" class="w-full border rounded px-3 py-2">
+                            <option value="positive" ${behaviorType === 'positive' ? 'selected' : ''}>Positive</option>
+                            <option value="negative" ${behaviorType === 'negative' ? 'selected' : ''}>Negative</option>
+                            <option value="neutral" ${behaviorType === 'neutral' ? 'selected' : ''}>Neutral</option>
+                        </select>
+                    </div>
+                    <div>
+                        <label class="block text-sm font-medium mb-1">Note</label>
+                        <textarea id="edit-note" class="w-full border rounded px-3 py-2" rows="2">${note || ''}</textarea>
+                    </div>
+                `;
+            } else if (type === 'attendance') {
+                fields = `
+                    <div>
+                        <label class="block text-sm font-medium mb-1">Status</label>
+                        <select id="edit-attendance-status" class="w-full border rounded px-3 py-2">
+                            <option value="present" ${status === 'present' ? 'selected' : ''}>Present</option>
+                            <option value="absent" ${status === 'absent' ? 'selected' : ''}>Absent</option>
+                            <option value="late" ${status === 'late' ? 'selected' : ''}>Late</option>
+                        </select>
+                    </div>
+                    <div>
+                        <label class="block text-sm font-medium mb-1">Date</label>
+                        <input type="date" id="edit-attendance-date" value="${date || ''}" class="w-full border rounded px-3 py-2">
+                    </div>
+                `;
+            } else if (type === 'homework') {
+                fields = `
+                    <div>
+                        <label class="block text-sm font-medium mb-1">Title</label>
+                        <input type="text" id="edit-homework-title" value="${title || ''}" class="w-full border rounded px-3 py-2">
+                    </div>
+                    <div>
+                        <label class="block text-sm font-medium mb-1">Status</label>
+                        <input type="text" id="edit-homework-status" value="${homeworkStatus || ''}" class="w-full border rounded px-3 py-2" placeholder="e.g., pending, submitted, in progress">
+                    </div>
+                    <div>
+                        <label class="block text-sm font-medium mb-1">Due Date</label>
+                        <input type="date" id="edit-homework-due" value="${dueDate || ''}" class="w-full border rounded px-3 py-2">
+                    </div>
+                `;
+            }
+            
+            document.getElementById('edit-fields').innerHTML = fields;
+            document.getElementById('edit-modal').classList.remove('hidden');
+        }
+        
+        function hideEditModal() {
+            document.getElementById('edit-modal').classList.add('hidden');
+        }
+        
+        document.getElementById('edit-form').addEventListener('submit', async (e) => {
+            e.preventDefault();
+            const type = document.getElementById('edit-type').value;
+            const id = document.getElementById('edit-id').value;
+            
+            let url = '';
+            let body = {};
+            
+            if (type === 'student') {
+                url = `/api/students/${id}`;
+                body = {
+                    name: document.getElementById('edit-name').value,
+                    details: document.getElementById('edit-details').value
+                };
+            } else if (type === 'grade') {
+                url = `/api/grades/${id}`;
+                body = {
+                    score: parseFloat(document.getElementById('edit-score').value),
+                    subject: document.getElementById('edit-subject').value
+                };
+            } else if (type === 'behavior') {
+                url = `/api/behaviors/${id}`;
+                body = {
+                    behavior_type: document.getElementById('edit-behavior-type').value,
+                    note: document.getElementById('edit-note').value
+                };
+            } else if (type === 'attendance') {
+                url = `/api/attendance/${id}`;
+                body = {
+                    status: document.getElementById('edit-attendance-status').value,
+                    date: document.getElementById('edit-attendance-date').value
+                };
+            } else if (type === 'homework') {
+                url = `/api/homework/${id}`;
+                body = {
+                    title: document.getElementById('edit-homework-title').value,
+                    status: document.getElementById('edit-homework-status').value,
+                    due_date: document.getElementById('edit-homework-due').value || null
+                };
+            }
+            
+            try {
+                const response = await fetch(url, {
+                    method: 'PUT',
+                    headers: {
+                        'Content-Type': 'application/json',
+                        'Authorization': 'Bearer ' + authToken
+                    },
+                    body: JSON.stringify(body)
+                });
+                
+                if (response.ok) {
+                    location.reload();
+                } else {
+                    alert('Failed to update');
+                }
+            } catch (err) {
+                alert('Error: ' + err);
+            }
+            
+            hideEditModal();
+        });
+        
+        let deleteState = {};
+        
+        function confirmDelete(type, id, btnId) {
+            if (!deleteState[btnId]) {
+                deleteState[btnId] = true;
+                const btn = document.getElementById(btnId);
+                btn.textContent = 'Confirm?';
+                btn.classList.remove('text-red-500');
+                btn.classList.add('text-orange-500', 'font-bold');
+                setTimeout(() => {
+                    deleteState[btnId] = false;
+                    btn.textContent = 'Delete';
+                    btn.classList.add('text-red-500');
+                    btn.classList.remove('text-orange-500', 'font-bold');
+                }, 3000);
+            } else {
+                deleteRecord(type, id);
+            }
+        }
+        
+        function confirmDeleteStudent() {
+            const btn = document.getElementById('delete-student-btn');
+            if (!deleteState['student']) {
+                deleteState['student'] = true;
+                btn.textContent = 'Click to Confirm';
+                btn.classList.remove('bg-red-500');
+                btn.classList.add('bg-orange-500');
+                setTimeout(() => {
+                    deleteState['student'] = false;
+                    btn.textContent = 'Delete Student';
+                    btn.classList.add('bg-red-500');
+                    btn.classList.remove('bg-orange-500');
+                }, 3000);
+            } else {
+                deleteRecord('student', '{{ student.name }}');
+            }
+        }
+        
+        async function deleteRecord(type, id) {
+            let url = '';
+            if (type === 'student') url = `/api/students/${id}`;
+            else if (type === 'grade') url = `/api/grades/${id}`;
+            else if (type === 'behavior') url = `/api/behaviors/${id}`;
+            else if (type === 'attendance') url = `/api/attendance/${id}`;
+            else if (type === 'homework') url = `/api/homework/${id}`;
+            
+            try {
+                const response = await fetch(url, {
+                    method: 'DELETE',
+                    headers: { 'Authorization': 'Bearer ' + authToken }
+                });
+                
+                if (response.ok) {
+                    if (type === 'student') {
+                        window.location.href = '/students';
+                    } else {
+                        location.reload();
+                    }
+                } else {
+                    alert('Failed to delete');
+                }
+            } catch (err) {
+                alert('Error: ' + err);
+            }
+        }
+    </script>
+</body>
+</html>

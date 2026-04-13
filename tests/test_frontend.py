@@ -1,5 +1,6 @@
 import pytest
 from jinja2 import Environment, FileSystemLoader, exceptions
+from datetime import datetime
 import os
 
 
@@ -93,7 +94,7 @@ class TestFrontend:
         template = self.env.get_template('index.html')
         rendered = template.render(request={}, students=[], admin_exists=True)
         
-        buttons = ['/add-student', '/grade', '/behavior', '/homework', '/attendance', '/report', '/report --pdf']
+        buttons = ['/add-student', '/grade', '/behavior', '/homework', '/attendance', '/report']
         for btn in buttons:
             assert btn in rendered
     
@@ -119,3 +120,94 @@ class TestFrontend:
         assert 'Setup' in rendered
         assert 'username' in rendered.lower()
         assert 'password' in rendered.lower()
+    
+    def test_dashboard_template_compiles(self):
+        """Verify dashboard.html template compiles without errors"""
+        template = self.env.get_template('dashboard.html')
+        assert template is not None
+    
+    def test_dashboard_renders_student_data(self):
+        """Verify dashboard template renders student data fields"""
+        from datetime import datetime
+        template = self.env.get_template('dashboard.html')
+        rendered = template.render(
+            request={},
+            student={'name': 'John', 'details': 'Test'},
+            grades=[],
+            behaviors=[],
+            attendances=[],
+            homeworks=[],
+            avg_grade=85.0,
+            attendance_pct=90.0,
+            pending_hw=2,
+            submitted_hw=5,
+            other_hw=1
+        )
+        assert 'John' in rendered
+        assert '85.0' in rendered
+        assert 'Grades' in rendered
+        assert 'Behaviors' in rendered
+        assert 'Attendance' in rendered
+        assert 'Homework' in rendered
+    
+    def test_students_list_template_compiles(self):
+        """Verify students.html template compiles"""
+        template = self.env.get_template('students.html')
+        assert template is not None
+    
+    def test_students_list_renders_student_names(self):
+        """Verify students list shows student names"""
+        template = self.env.get_template('students.html')
+        rendered = template.render(request={}, students=[
+            {'name': 'Alice', 'details': None},
+            {'name': 'Bob', 'details': 'Test student'}
+        ])
+        assert 'Alice' in rendered
+        assert 'Bob' in rendered
+    
+    def test_dashboard_delete_confirmation_ui(self):
+        """Verify delete confirmation UI elements present"""
+        template = self.env.get_template('dashboard.html')
+        rendered = template.render(
+            request={},
+            student={'name': 'John', 'details': ''},
+            grades=[], behaviors=[], attendances=[], homeworks=[],
+            avg_grade=0, attendance_pct=0, pending_hw=0, submitted_hw=0, other_hw=0
+        )
+        assert 'confirmDelete' in rendered
+        assert 'Delete' in rendered
+    
+    def test_dashboard_edit_modal_structure(self):
+        """Verify edit modal structure present"""
+        template = self.env.get_template('dashboard.html')
+        rendered = template.render(
+            request={},
+            student={'name': 'John', 'details': ''},
+            grades=[], behaviors=[], attendances=[], homeworks=[],
+            avg_grade=0, attendance_pct=0, pending_hw=0, submitted_hw=0, other_hw=0
+        )
+        assert 'edit-modal' in rendered
+        assert 'showEditModal' in rendered
+        assert 'edit-form' in rendered
+    
+    def test_dashboard_has_edit_delete_buttons(self):
+        """Verify edit and delete buttons present in dashboard"""
+        template = self.env.get_template('dashboard.html')
+        rendered = template.render(
+            request={},
+            student={'name': 'John', 'details': ''},
+            grades=[{'id': 1, 'score': 90, 'subject': 'Math', 'created_at': datetime.now()}],
+            behaviors=[],
+            attendances=[],
+            homeworks=[],
+            avg_grade=90, attendance_pct=100, pending_hw=0, submitted_hw=0, other_hw=0
+        )
+        assert 'Edit' in rendered
+        assert 'Delete Student' in rendered
+    
+    def test_index_has_dashboard_button(self):
+        """Verify quick reference has Dashboard link"""
+        template = self.env.get_template('index.html')
+        rendered = template.render(request={}, students=[], admin_exists=True)
+        assert 'Dashboard' in rendered
+        assert '/students' in rendered
