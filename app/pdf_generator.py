@@ -60,6 +60,7 @@ def generate_pdf_report(student, grades, behaviors, attendances, homeworks, avg_
     </head>
     <body>
         <h1>Student Report: {student.name}</h1>
+        <p><strong>Student ID:</strong> {student.student_id or 'N/A'} | <strong>Year:</strong> {student.year or 'N/A'}</p>
         {f'<p><em>Report Period: {date_range}</em></p>' if date_range else ''}
         
         <div class="summary">

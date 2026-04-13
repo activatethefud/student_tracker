@@ -55,8 +55,12 @@
                 <a href="/student/{{ student.name }}" 
                    class="block p-4 border rounded-lg hover:bg-blue-50 hover:border-blue-300 transition-colors">
                     <span class="font-medium text-lg">{{ student.name }}</span>
+                    <span class="text-sm text-gray-500 block">
+                        {% if student.student_id %}ID: {{ student.student_id }}{% endif %}
+                        {% if student.year %} | {{ student.year }}{% endif %}
+                    </span>
                     {% if student.details %}
-                    <p class="text-sm text-gray-500 mt-1 truncate">{{ student.details }}</p>
+                    <p class="text-sm text-gray-400 mt-1 truncate">{{ student.details }}</p>
                     {% endif %}
                 </a>
                 {% endfor %}

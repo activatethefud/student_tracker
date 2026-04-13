@@ -1,5 +1,5 @@
-from pydantic import BaseModel
 from typing import Optional
+from pydantic import BaseModel
 
 
 class CommandRequest(BaseModel):
@@ -16,8 +16,16 @@ def parse_command(command: str) -> dict:
     
     if cmd in ("addstudent", "add", "add-student"):
         if len(args) < 1:
-            return {"action": "error", "message": "Usage: /add-student <name>"}
-        return {"action": "add_student", "name": args[0], "details": " ".join(args[2:]) if len(args) > 2 else None}
+            return {"action": "error", "message": "Usage: /add-student <name> [--year \"Grade N\"]"}
+        student_name = args[0]
+        year = None
+        details = None
+        for i, arg in enumerate(args):
+            if arg in ("--year", "--yr", "-y") and i + 1 < len(args):
+                year = args[i + 1]
+            elif arg == "--details" and i + 1 < len(args):
+                details = args[i + 1]
+        return {"action": "add_student", "name": student_name, "year": year, "details": details}
     
     if cmd == "grade":
         if len(args) < 2:
@@ -126,15 +134,16 @@ def parse_command(command: str) -> dict:
         return {"action": "open_dashboard", "student_name": args[0]}
     
     if cmd == "help":
-        return {"action": "help", "message": """Available commands:
-/add-student <name> - Add a new student
-/grade <name> <score> [--subject <subject>] [--date YYYY-MM-DD] - Add a grade
+        message = """Available commands:
+/add-student <name> [--year "Grade N"] - Add a new student (e.g., /add-student John --year "Grade 8")
+/grade <name> <score> [--subject <subject>] [--date YYYY-MM-DD] - Add a grade (use name or ID like STU-001)
 /behavior <name> <type> [--note "note"] [--date YYYY-MM-DD] - Record behavior (positive/negative/neutral)
 /attendance <name> present|absent|late [--date YYYY-MM-DD] - Mark attendance
 /homework <name> <title> [--due YYYY-MM-DD] [--status <status>] - Add homework
-/report <name> [--from YYYY-MM-DD] [--to YYYY-MM-DD] [--pdf] - Get student report
-/dashboard <name> - Open student dashboard
+/report <name> [--from YYYY-MM-DD] [--to YYYY-MM-DD] [--pdf] - Get student report (use name or ID)
+/dashboard <name> - Open student dashboard (use name or ID)
 /dashboard - List all students
-/help - Show this help"""}
+/help - Show this help"""
+        return {"action": "help", "message": message}
     
     return {"action": "invalid", "message": f"Unknown command: /{cmd}. Type /help for available commands."}

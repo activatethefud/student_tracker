@@ -52,8 +52,12 @@
             <div class="flex flex-col sm:flex-row sm:justify-between sm:items-start gap-3 mb-4">
                 <div>
                     <h1 class="text-2xl sm:text-3xl font-bold">{{ student.name }}</h1>
+                    <p class="text-gray-500 mt-1 text-sm">
+                        {% if student.student_id %}ID: {{ student.student_id }}{% endif %}
+                        {% if student.year %} | Year: {{ student.year }}{% endif %}
+                    </p>
                     {% if student.details %}
-                    <p class="text-gray-500 mt-1 text-sm">{{ student.details }}</p>
+                    <p class="text-gray-400 mt-1 text-sm">{{ student.details }}</p>
                     {% endif %}
                 </div>
                 <div class="flex gap-2">
@@ -385,6 +389,10 @@
                     <input type="text" id="edit-name" value="{{ student.name }}" class="w-full border rounded px-3 py-2">
                 </div>
                 <div>
+                    <label class="block text-sm font-medium mb-1">Year (e.g., Grade 8)</label>
+                    <input type="text" id="edit-year" value="{% if student.year %}{{ student.year }}{% endif %}" class="w-full border rounded px-3 py-2" placeholder="Grade 8">
+                </div>
+                <div>
                     <label class="block text-sm font-medium mb-1">Details</label>
                     <textarea id="edit-details" class="w-full border rounded px-3 py-2" rows="2">{% if student.details %}{{ student.details }}{% endif %}</textarea>
                 </div>
@@ -476,6 +484,7 @@
                 url = `/api/students/${id}`;
                 body = {
                     name: document.getElementById('edit-name').value,
+                    year: document.getElementById('edit-year').value || null,
                     details: document.getElementById('edit-details').value
                 };
             } else if (type === 'grade') {

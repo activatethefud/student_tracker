@@ -9,7 +9,9 @@ class Student(Base):
     __tablename__ = "students"
 
     id = Column(Integer, primary_key=True)
+    student_id = Column(String(20), unique=True, nullable=True)  # e.g., "STU-001"
     name = Column(String(200), nullable=False)
+    year = Column(String(50), nullable=True)  # e.g., "Grade 8", "Grade 1"
     details = Column(Text, nullable=True)
     created_at = Column(DateTime, default=datetime.utcnow)
 
@@ -17,6 +19,27 @@ class Student(Base):
     behaviors = relationship("Behavior", back_populates="student", cascade="all, delete-orphan")
     attendances = relationship("Attendance", back_populates="student", cascade="all, delete-orphan")
     homeworks = relationship("Homework", back_populates="student", cascade="all, delete-orphan")
+
+
+def generate_student_id(session):
+    """Generate unique student ID like STU-001, STU-002, etc."""
+    last_student = session.query(Student).filter(Student.student_id != None).order_by(Student.id.desc()).first()
+    if last_student and last_student.student_id:
+        try:
+            num = int(last_student.student_id.split("-")[1])
+            return f"STU-{num + 1:03d}"
+        except:
+            pass
+    return "STU-001"
+
+
+def assign_missing_student_ids(session):
+    """Assign student IDs to students who don't have one."""
+    students_without_id = session.query(Student).filter(Student.student_id == None).order_by(Student.id).all()
+    for student in students_without_id:
+        student.student_id = generate_student_id(session)
+    if students_without_id:
+        session.commit()
 
 
 class Grade(Base):

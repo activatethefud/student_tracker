@@ -10,7 +10,7 @@ import bcrypt
 from jose import JWTError, jwt
 from pydantic import BaseModel
 
-from app.models import Base, get_engine, get_session, Student, Grade, Behavior, Attendance, Homework, User
+from app.models import Base, get_engine, get_session, Student, Grade, Behavior, Attendance, Homework, User, generate_student_id, assign_missing_student_ids
 from app.config import settings
 from app.commands import parse_command
 
@@ -23,6 +23,44 @@ app.mount("/static", StaticFiles(directory="static"), name="static")
 engine = get_engine(settings.db_path)
 
 failed_login_attempts = {}
+
+
+def resolve_student(db: Session, identifier: str):
+    """
+    Resolve a student by name or student_id (supports prefix matching).
+    Returns (student, error_message) where error_message is None on success.
+    """
+    identifier = identifier.strip()
+    
+    # First try exact student_id match
+    student = db.query(Student).filter(Student.student_id == identifier).first()
+    if student:
+        return student, None
+    
+    # Try prefix match on student_id
+    students = db.query(Student).filter(Student.student_id.like(f"{identifier}%")).all()
+    if len(students) == 1:
+        return students[0], None
+    if len(students) > 1:
+        return None, f"Multiple students match '{identifier}': " + ", ".join(
+            f"{s.name} ({s.student_id}, {s.year})" for s in students
+        ) + ". Use student ID (e.g., /report STU-001)"
+    
+    # Try exact name match
+    student = db.query(Student).filter(Student.name == identifier).first()
+    if student:
+        return student, None
+    
+    # Try partial name match
+    students = db.query(Student).filter(Student.name.ilike(f"%{identifier}%")).all()
+    if len(students) == 1:
+        return students[0], None
+    if len(students) > 1:
+        return None, f"Multiple students match '{identifier}': " + ", ".join(
+            f"{s.name} ({s.student_id}, {s.year})" for s in students
+        ) + ". Use student ID (e.g., /report STU-001)"
+    
+    return None, f"Student '{identifier}' not found"
 
 
 def get_db():
@@ -92,6 +130,11 @@ class AttendanceCreate(BaseModel):
 @app.on_event("startup")
 def startup():
     Base.metadata.create_all(engine)
+    db = get_session(engine)
+    try:
+        assign_missing_student_ids(db)
+    finally:
+        db.close()
 
 
 @app.get("/")
@@ -390,17 +433,21 @@ def delete_homework(homework_id: int, db: Session = Depends(get_db), current_use
 
 class StudentUpdate(BaseModel):
     name: Optional[str] = None
+    year: Optional[str] = None
     details: Optional[str] = None
 
 
 @app.put("/api/students/{student_name}")
 def update_student(student_name: str, update: StudentUpdate, db: Session = Depends(get_db), current_user: User = Depends(get_current_user)):
-    student = db.query(Student).filter(Student.name == student_name).first()
-    if not student:
-        raise HTTPException(status_code=404, detail="Student not found")
+    # Try to resolve by name or student_id (handles renamed students too)
+    student, error = resolve_student(db, student_name)
+    if error:
+        raise HTTPException(status_code=404, detail=error)
     
     if update.name is not None:
         student.name = update.name
+    if update.year is not None:
+        student.year = update.year
     if update.details is not None:
         student.details = update.details
     
@@ -448,15 +495,21 @@ def execute_command(request: CommandRequest, db: Session = Depends(get_db), curr
         existing = db.query(Student).filter(Student.name == cmd["name"]).first()
         if existing:
             return {"success": False, "message": f"Student '{cmd['name']}' already exists"}
-        new_student = Student(name=cmd["name"], details=cmd.get("details"))
+        new_student = Student(
+            name=cmd["name"],
+            year=cmd.get("year"),
+            details=cmd.get("details"),
+            student_id=generate_student_id(db)
+        )
         db.add(new_student)
         db.commit()
-        return {"success": True, "message": f"Added student: {cmd['name']}"}
+        year_msg = f" (Year: {cmd['year']})" if cmd.get("year") else ""
+        return {"success": True, "message": f"Added student: {cmd['name']} (ID: {new_student.student_id}){year_msg}"}
     
     if cmd["action"] == "add_grade":
-        student = db.query(Student).filter(Student.name == cmd["student_name"]).first()
-        if not student:
-            return {"success": False, "message": f"Student '{cmd['student_name']}' not found. Use /add-student first."}
+        student, error = resolve_student(db, cmd["student_name"])
+        if error:
+            return {"success": False, "message": error}
         new_grade = Grade(student_id=student.id, score=cmd["score"], subject=cmd["subject"])
         if cmd.get("date"):
             try:
@@ -469,9 +522,9 @@ def execute_command(request: CommandRequest, db: Session = Depends(get_db), curr
         return {"success": True, "message": f"Added {cmd['subject']} grade {cmd['score']} for {cmd['student_name']}{date_msg}"}
     
     if cmd["action"] == "add_behavior":
-        student = db.query(Student).filter(Student.name == cmd["student_name"]).first()
-        if not student:
-            return {"success": False, "message": f"Student '{cmd['student_name']}' not found. Use /add-student first."}
+        student, error = resolve_student(db, cmd["student_name"])
+        if error:
+            return {"success": False, "message": error}
         new_behavior = Behavior(student_id=student.id, note=cmd["note"], behavior_type=cmd["behavior_type"])
         if cmd.get("date"):
             try:
@@ -484,9 +537,9 @@ def execute_command(request: CommandRequest, db: Session = Depends(get_db), curr
         return {"success": True, "message": f"Recorded {cmd['behavior_type']} behavior for {cmd['student_name']}: {cmd['note']}{date_msg}"}
     
     if cmd["action"] == "mark_attendance":
-        student = db.query(Student).filter(Student.name == cmd["student_name"]).first()
-        if not student:
-            return {"success": False, "message": f"Student '{cmd['student_name']}' not found. Use /add-student first."}
+        student, error = resolve_student(db, cmd["student_name"])
+        if error:
+            return {"success": False, "message": error}
         if cmd["status"] not in ("present", "absent", "late"):
             return {"success": False, "message": "Status must be: present, absent, or late"}
         new_attendance = Attendance(student_id=student.id, status=cmd["status"])
@@ -501,9 +554,9 @@ def execute_command(request: CommandRequest, db: Session = Depends(get_db), curr
         return {"success": True, "message": f"Marked {cmd['student_name']} as {cmd['status']}{date_msg}"}
     
     if cmd["action"] == "add_homework":
-        student = db.query(Student).filter(Student.name == cmd["student_name"]).first()
-        if not student:
-            return {"success": False, "message": f"Student '{cmd['student_name']}' not found. Use /add-student first."}
+        student, error = resolve_student(db, cmd["student_name"])
+        if error:
+            return {"success": False, "message": error}
         new_homework = Homework(student_id=student.id, title=cmd["title"], status=cmd["status"])
         if cmd.get("due_date"):
             try:
@@ -516,9 +569,9 @@ def execute_command(request: CommandRequest, db: Session = Depends(get_db), curr
         return {"success": True, "message": f"Added homework for {cmd['student_name']}: {cmd['title']} (status: {cmd['status']}){due_msg}"}
     
     if cmd["action"] == "get_report":
-        student = db.query(Student).filter(Student.name == cmd["student_name"]).first()
-        if not student:
-            return {"success": False, "message": f"Student '{cmd['student_name']}' not found"}
+        student, error = resolve_student(db, cmd["student_name"])
+        if error:
+            return {"success": False, "message": error}
         
         grades = student.grades
         behaviors = student.behaviors
@@ -559,7 +612,13 @@ def execute_command(request: CommandRequest, db: Session = Depends(get_db), curr
         elif date_to:
             date_range = f" (to {date_to})"
         
-        report = f"<strong>Report for {student.name}</strong>{date_range}\n"
+        student_info = f"{student.name}"
+        if student.student_id:
+            student_info += f" (ID: {student.student_id})"
+        if student.year:
+            student_info += f" - {student.year}"
+        
+        report = f"<strong>Report for {student_info}</strong>{date_range}\n"
         report += f"Average Grade: {avg_grade:.2f}\n"
         report += f"Grades: {', '.join(f'{g.score} ({g.subject})' for g in grades) or 'None'}\n"
         report += f"Behaviors: {', '.join(f'{b.behavior_type}' for b in behaviors) or 'None'}\n"
@@ -575,7 +634,10 @@ def execute_command(request: CommandRequest, db: Session = Depends(get_db), curr
         return {"success": True, "message": report}
     
     if cmd["action"] == "open_dashboard":
-        return {"success": True, "action": "redirect", "url": f"/student/{cmd['student_name']}"}
+        student, error = resolve_student(db, cmd["student_name"])
+        if error:
+            return {"success": False, "message": error}
+        return {"success": True, "action": "redirect", "url": f"/student/{student.name}"}
     
     if cmd["action"] == "list_dashboard":
         return {"success": True, "action": "redirect", "url": "/students"}
