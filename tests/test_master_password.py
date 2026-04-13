@@ -3,7 +3,7 @@ from fastapi.testclient import TestClient
 from sqlalchemy import create_engine
 from sqlalchemy.orm import sessionmaker
 
-from app.main import app, get_db
+from app.main import app, get_db, failed_login_attempts
 from app.models import Base, Student, User
 import bcrypt
 
@@ -26,8 +26,10 @@ app.dependency_overrides[get_db] = override_get_db
 
 @pytest.fixture(autouse=True)
 def setup_database():
+    failed_login_attempts.clear()
     Base.metadata.create_all(bind=engine)
     yield
+    failed_login_attempts.clear()
     db = TestingSessionLocal()
     db.query(User).delete()
     db.query(Student).delete()

