@@ -220,51 +220,6 @@ def get_student_report(student_name: str, db: Session = Depends(get_db), current
     }
 
 
-@app.get("/api/autocomplete")
-def autocomplete(prefix: str, db: Session = Depends(get_db), current_user: User = Depends(get_current_user)):
-    if not prefix:
-        return {"suggestions": []}
-    
-    prefix_lower = prefix.lower().strip()
-    suggestions = []
-    
-    commands = [
-        "/add-student", "/grade", "/behavior", "/attendance", 
-        "/homework", "/report", "/report --pdf", "/help"
-    ]
-    
-    if prefix_lower.startswith("/"):
-        for cmd in commands:
-            if cmd.startswith(prefix_lower):
-                suggestions.append({"type": "command", "value": cmd})
-    else:
-        students = db.query(Student).filter(Student.name.ilike(f"{prefix_lower}%")).limit(10).all()
-        for s in students:
-            suggestions.append({"type": "student", "value": s.name})
-        
-        subjects = ["Math", "Science", "English", "History", "Art", "Music", "PE"]
-        for subj in subjects:
-            if subj.lower().startswith(prefix_lower):
-                suggestions.append({"type": "subject", "value": subj})
-        
-        behavior_types = ["positive", "negative", "neutral"]
-        for bt in behavior_types:
-            if bt.startswith(prefix_lower):
-                suggestions.append({"type": "behavior_type", "value": bt})
-        
-        attendance_statuses = ["present", "absent", "late"]
-        for status in attendance_statuses:
-            if status.startswith(prefix_lower):
-                suggestions.append({"type": "attendance_status", "value": status})
-        
-        homework_statuses = ["pending", "submitted"]
-        for status in homework_statuses:
-            if status.startswith(prefix_lower):
-                suggestions.append({"type": "homework_status", "value": status})
-    
-    return {"suggestions": suggestions[:15]}
-
-
 @app.post("/api/setup-admin")
 def setup_admin(username: str = "admin", password: str = "admin", db: Session = Depends(get_db)):
     existing = db.query(User).filter(User.username == username).first()

@@ -6,7 +6,6 @@ A real-time student tracking application for recording grades, behavior, and att
 
 - **Slash Commands** - Quick data entry: `/grade`, `/behavior`, `/attendance`, `/homework`, `/report`
 - **Homework Tracking** - Track assignments with due dates and status (pending/submitted)
-- **Autocomplete** - Smart suggestions for commands, student names, subjects, and options
 - **Date/Time Support** - Add historical records with `--date YYYY-MM-DD`
 - **PDF Reports** - Generate downloadable PDF reports with `--pdf`
 - **Chat UI** - Simple, fast, mobile-friendly interface with login
@@ -91,7 +90,6 @@ docker compose up --build
 | POST | `/api/init-admin` | Initialize admin user |
 | POST | `/api/command` | Execute slash command (auth required) |
 | GET | `/api/students` | List students (auth required) |
-| GET | `/api/autocomplete` | Autocomplete suggestions (auth required) |
 | GET | `/api/students/{name}/report` | Get JSON report |
 | POST | `/api/students/{name}/report/pdf` | Download PDF report |
 
