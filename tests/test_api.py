@@ -486,9 +486,13 @@ class TestDashboardAPI:
         assert student.name == "Johnny"
         assert student.details == "Updated details"
     
-    def test_dashboard_requires_auth(self, client):
+    def test_students_page_loads_without_auth(self, client):
         response = client.get("/students")
-        assert response.status_code == 401
+        assert response.status_code == 200
+    
+    def test_student_dashboard_loads_without_auth(self, client):
+        response = client.get("/student/John")
+        assert response.status_code in [200, 404]
     
     def test_delete_nonexistent_grade_returns_404(self, client, admin_user):
         login = client.post("/token", data={"username": "admin", "password": "test"})

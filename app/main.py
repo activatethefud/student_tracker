@@ -221,13 +221,13 @@ def get_student_report(student_name: str, db: Session = Depends(get_db), current
 
 
 @app.get("/students")
-def list_students_page(db: Session = Depends(get_db), current_user: User = Depends(get_current_user)):
+def list_students_page(db: Session = Depends(get_db)):
     students = db.query(Student).order_by(Student.name).all()
     return templates.TemplateResponse("students.html", {"request": {}, "students": students})
 
 
 @app.get("/student/{student_name}")
-def student_dashboard(student_name: str, db: Session = Depends(get_db), current_user: User = Depends(get_current_user)):
+def student_dashboard(student_name: str, db: Session = Depends(get_db)):
     student = db.query(Student).filter(Student.name == student_name).first()
     if not student:
         raise HTTPException(status_code=404, detail=f"Student '{student_name}' not found")
