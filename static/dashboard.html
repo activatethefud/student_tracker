@@ -323,6 +323,45 @@
             <p class="text-gray-500 text-center py-4">No activity records</p>
             {% endif %}
         </div>
+        
+        <div class="bg-white rounded-lg shadow-lg p-4 sm:p-6">
+            <div class="flex justify-between items-center mb-4">
+                <h2 class="text-lg font-bold">Progress</h2>
+                <span class="text-sm text-gray-500">{{ progresses|length }} records</span>
+            </div>
+            {% if progresses %}
+            <div class="overflow-x-auto">
+                <table class="w-full text-sm">
+                    <thead class="bg-gray-50">
+                        <tr>
+                            <th class="px-3 py-2 text-left">Goal</th>
+                            <th class="px-3 py-2 text-left">Value</th>
+                            <th class="px-3 py-2 text-left">Date</th>
+                            <th class="px-3 py-2 text-right">Actions</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {% for progress in progresses %}
+                        <tr class="border-t">
+                            <td class="px-3 py-2">{{ progress.goal }}</td>
+                            <td class="px-3 py-2 font-medium">{{ progress.value }}</td>
+                            <td class="px-3 py-2 text-gray-500">{% if progress.date %}{{ progress.date.strftime('%Y-%m-%d') }}{% else %}-{% endif %}</td>
+                            <td class="px-3 py-2 text-right">
+                                <button onclick="showEditModal('progress', {{ progress.id }}, null, null, null, null, null, null, null, null, null, null, null, null, '{{ progress.goal }}', {{ progress.value }}, '{% if progress.date %}{{ progress.date.strftime('%Y-%m-%d') }}{% endif %}')" 
+                                        class="text-blue-500 hover:underline mr-2">Edit</button>
+                                <button onclick="confirmDelete('progress', {{ progress.id }}, 'delete-progress-btn-{{ progress.id }}')" 
+                                        id="delete-progress-btn-{{ progress.id }}"
+                                        class="text-red-500 hover:underline">Delete</button>
+                            </td>
+                        </tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+            </div>
+            {% else %}
+            <p class="text-gray-500 text-center py-4">No progress records</p>
+            {% endif %}
+        </div>
     </div>
     
     <div id="edit-modal" class="hidden fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
@@ -479,7 +518,7 @@
             document.getElementById('edit-modal').classList.remove('hidden');
         }
         
-        function showEditModal(type, id, score, subject, behaviorType, note, status, date, title, homeworkStatus, dueDate, activityType, activityStatus, activityDate) {
+        function showEditModal(type, id, score, subject, behaviorType, note, status, date, title, homeworkStatus, dueDate, activityType, activityStatus, activityDate, progressGoal, progressValue, progressDate) {
             document.getElementById('edit-modal-title').textContent = 'Edit ' + type.charAt(0).toUpperCase() + type.slice(1);
             document.getElementById('edit-type').value = type;
             document.getElementById('edit-id').value = id;
@@ -559,6 +598,21 @@
                         <input type="date" id="edit-activity-date" value="${activityDate || ''}" class="w-full border rounded px-3 py-2">
                     </div>
                 `;
+            } else if (type === 'progress') {
+                fields = `
+                    <div>
+                        <label class="block text-sm font-medium mb-1">Goal</label>
+                        <input type="text" id="edit-progress-goal" value="${progressGoal || ''}" class="w-full border rounded px-3 py-2" placeholder="e.g., running, weight, math-score">
+                    </div>
+                    <div>
+                        <label class="block text-sm font-medium mb-1">Value</label>
+                        <input type="number" step="0.01" id="edit-progress-value" value="${progressValue || ''}" class="w-full border rounded px-3 py-2">
+                    </div>
+                    <div>
+                        <label class="block text-sm font-medium mb-1">Date</label>
+                        <input type="date" id="edit-progress-date" value="${progressDate || ''}" class="w-full border rounded px-3 py-2">
+                    </div>
+                `;
             }
             
             document.getElementById('edit-fields').innerHTML = fields;
@@ -615,6 +669,13 @@
                     activity_type: document.getElementById('edit-activity-type').value,
                     status: document.getElementById('edit-activity-status').value,
                     date: document.getElementById('edit-activity-date').value || null
+                };
+            } else if (type === 'progress') {
+                url = `/api/progress/${id}`;
+                body = {
+                    goal: document.getElementById('edit-progress-goal').value,
+                    value: parseFloat(document.getElementById('edit-progress-value').value),
+                    date: document.getElementById('edit-progress-date').value || null
                 };
             }
             
@@ -723,6 +784,7 @@
             else if (type === 'attendance') url = `/api/attendance/${id}`;
             else if (type === 'homework') url = `/api/homework/${id}`;
             else if (type === 'activity') url = `/api/activities/${id}`;
+            else if (type === 'progress') url = `/api/progress/${id}`;
             
             try {
                 const response = await fetch(url, {

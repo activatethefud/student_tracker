@@ -11,7 +11,7 @@ import bcrypt
 from jose import JWTError, jwt
 from pydantic import BaseModel
 
-from app.models import Base, get_engine, get_session, Student, Grade, Behavior, Attendance, Homework, Activity, User, generate_student_id, assign_missing_student_ids
+from app.models import Base, get_engine, get_session, Student, Grade, Behavior, Attendance, Homework, Activity, Progress, User, generate_student_id, assign_missing_student_ids
 from app.config import settings
 from app.commands import parse_command
 
@@ -153,6 +153,12 @@ class ActivityCreate(BaseModel):
     student_name: str
     activity_type: str  # any user-defined type
     status: str  # yes, no
+
+
+class ProgressCreate(BaseModel):
+    student_name: str
+    goal: str  # any user-defined goal
+    value: float
 
 
 @app.get("/")
@@ -377,6 +383,7 @@ def get_student_report(student_name: str, db: Session = Depends(get_db), current
     behaviors = [{"note": b.note, "type": b.behavior_type, "date": b.created_at.isoformat()} for b in student.behaviors]
     attendances = [{"status": a.status, "date": a.date.isoformat()} for a in student.attendances]
     activities = [{"activity_type": a.activity_type, "status": a.status, "date": a.date.isoformat()} for a in student.activities]
+    progress = [{"goal": p.goal, "value": p.value, "date": p.date.isoformat()} for p in student.progress]
     
     avg_grade = sum(g["score"] for g in grades) / len(grades) if grades else 0
     
@@ -387,6 +394,7 @@ def get_student_report(student_name: str, db: Session = Depends(get_db), current
         "behaviors": behaviors,
         "attendance": attendances,
         "activities": activities,
+        "progress": progress,
         "average_grade": round(avg_grade, 2)
     }
 
@@ -415,6 +423,7 @@ def student_dashboard(student_name: str, db: Session = Depends(get_db), current_
     attendances = student.attendances
     homeworks = student.homeworks
     activities = student.activities
+    progresses = student.progress
     
     avg_grade = sum(g.score for g in grades) / len(grades) if grades else 0
     present = len([a for a in attendances if a.status == "present"])
@@ -433,6 +442,7 @@ def student_dashboard(student_name: str, db: Session = Depends(get_db), current_
         "attendances": attendances,
         "homeworks": homeworks,
         "activities": activities,
+        "progresses": progresses,
         "avg_grade": round(avg_grade, 2),
         "attendance_pct": attendance_pct,
         "pending_hw": pending_hw,
@@ -605,6 +615,54 @@ def delete_activity(activity_id: int, db: Session = Depends(get_db), current_use
     return {"success": True, "message": f"Deleted activity {activity_id}"}
 
 
+@app.post("/api/progress")
+def add_progress(progress: ProgressCreate, db: Session = Depends(get_db), current_user: User = Depends(get_current_user)):
+    student = db.query(Student).filter(Student.name == progress.student_name).first()
+    if not student:
+        return {"success": False, "message": f"Student '{progress.student_name}' not found. Use /add-student first."}
+    new_progress = Progress(student_id=student.id, goal=progress.goal, value=progress.value)
+    db.add(new_progress)
+    db.commit()
+    return {"success": True, "message": f"Recorded progress {progress.goal}: {progress.value} for {progress.student_name}"}
+
+
+class ProgressUpdate(BaseModel):
+    goal: Optional[str] = None
+    value: Optional[float] = None
+    date: Optional[str] = None
+
+
+@app.put("/api/progress/{progress_id}")
+def update_progress(progress_id: int, update: ProgressUpdate, db: Session = Depends(get_db), current_user: User = Depends(get_current_user)):
+    progress = db.query(Progress).filter(Progress.id == progress_id).first()
+    if not progress:
+        raise HTTPException(status_code=404, detail="Progress not found")
+    
+    if update.goal is not None:
+        progress.goal = update.goal
+    if update.value is not None:
+        progress.value = update.value
+    if update.date is not None:
+        try:
+            progress.date = datetime.strptime(update.date, "%Y-%m-%d")
+        except ValueError:
+            pass
+    
+    db.commit()
+    return {"success": True, "message": f"Updated progress {progress_id}"}
+
+
+@app.delete("/api/progress/{progress_id}")
+def delete_progress(progress_id: int, db: Session = Depends(get_db), current_user: User = Depends(get_current_user)):
+    progress = db.query(Progress).filter(Progress.id == progress_id).first()
+    if not progress:
+        raise HTTPException(status_code=404, detail="Progress not found")
+    
+    db.delete(progress)
+    db.commit()
+    return {"success": True, "message": f"Deleted progress {progress_id}"}
+
+
 class StudentUpdate(BaseModel):
     name: Optional[str] = None
     year: Optional[str] = None
@@ -746,6 +804,21 @@ def execute_command(request: CommandRequest, db: Session = Depends(get_db), curr
         date_msg = f" (dated: {cmd['date']})" if cmd.get("date") else ""
         return {"success": True, "message": f"Recorded {cmd['activity_type']}: {cmd['status']} for {cmd['student_name']}{date_msg}"}
     
+    if cmd["action"] == "add_progress":
+        student, error = resolve_student(db, cmd["student_name"])
+        if error:
+            return {"success": False, "message": error}
+        new_progress = Progress(student_id=student.id, goal=cmd["goal"], value=cmd["value"])
+        if cmd.get("date"):
+            try:
+                new_progress.date = datetime.strptime(cmd["date"], "%Y-%m-%d")
+            except ValueError:
+                pass
+        db.add(new_progress)
+        db.commit()
+        date_msg = f" (dated: {cmd['date']})" if cmd.get("date") else ""
+        return {"success": True, "message": f"Recorded progress {cmd['goal']}: {cmd['value']} for {cmd['student_name']}{date_msg}"}
+    
     if cmd["action"] == "get_report":
         student, error = resolve_student(db, cmd["student_name"])
         if error:
@@ -756,6 +829,7 @@ def execute_command(request: CommandRequest, db: Session = Depends(get_db), curr
         attendances = student.attendances
         homeworks = student.homeworks
         activities = student.activities
+        progresses = student.progress
         
         date_from = cmd.get("date_from")
         date_to = cmd.get("date_to")
@@ -768,6 +842,7 @@ def execute_command(request: CommandRequest, db: Session = Depends(get_db), curr
                 attendances = [a for a in attendances if a.date >= from_date]
                 homeworks = [h for h in homeworks if h.created_at >= from_date]
                 activities = [a for a in activities if a.date >= from_date]
+                progresses = [p for p in progresses if p.date >= from_date]
             except ValueError:
                 pass
         
@@ -780,6 +855,7 @@ def execute_command(request: CommandRequest, db: Session = Depends(get_db), curr
                 attendances = [a for a in attendances if a.date < to_date]
                 homeworks = [h for h in homeworks if h.created_at < to_date]
                 activities = [a for a in activities if a.date < to_date]
+                progresses = [p for p in progresses if p.date < to_date]
             except ValueError:
                 pass
         
@@ -817,10 +893,21 @@ def execute_command(request: CommandRequest, db: Session = Depends(get_db), curr
         else:
             report += "Activity: None"
         
+        if progresses:
+            progress_goals = sorted(set(p.goal for p in progresses))
+            progress_parts = []
+            for goal in progress_goals:
+                goal_entries = [p for p in progresses if p.goal == goal]
+                latest = max(goal_entries, key=lambda p: p.date)
+                progress_parts.append(f"{goal}: latest {latest.value} ({len(goal_entries)} records)")
+            report += f"\nProgress: {'; '.join(progress_parts)}"
+        else:
+            report += "\nProgress: None"
+        
         if cmd.get("pdf"):
             from app.pdf_generator import generate_pdf_report
             date_range_display = date_range.replace("(", "").replace(")", "") if date_range else ""
-            pdf_content = generate_pdf_report(student, grades, behaviors, attendances, homeworks, activities, avg_grade, date_range_display)
+            pdf_content = generate_pdf_report(student, grades, behaviors, attendances, homeworks, activities, progresses, avg_grade, date_range_display)
             return Response(content=pdf_content, media_type="application/pdf", headers={"Content-Disposition": f"attachment; filename=report_{student.name}.pdf"})
         
         return {"success": True, "message": report}
@@ -854,6 +941,7 @@ def generate_pdf(student_name: str, date_from: str = None, date_to: str = None, 
     attendances = student.attendances
     homeworks = student.homeworks
     activities = student.activities
+    progresses = student.progress
     
     if date_from:
         from_date = datetime.strptime(date_from, "%Y-%m-%d")
@@ -862,6 +950,7 @@ def generate_pdf(student_name: str, date_from: str = None, date_to: str = None, 
         attendances = [a for a in attendances if a.date >= from_date]
         homeworks = [h for h in homeworks if h.created_at >= from_date]
         activities = [a for a in activities if a.date >= from_date]
+        progresses = [p for p in progresses if p.date >= from_date]
     
     if date_to:
         to_date = datetime.strptime(date_to, "%Y-%m-%d")
@@ -871,6 +960,7 @@ def generate_pdf(student_name: str, date_from: str = None, date_to: str = None, 
         attendances = [a for a in attendances if a.date < to_date]
         homeworks = [h for h in homeworks if h.created_at < to_date]
         activities = [a for a in activities if a.date < to_date]
+        progresses = [p for p in progresses if p.date < to_date]
     
     avg_grade = sum(g.score for g in grades) / len(grades) if grades else 0
     
@@ -882,7 +972,7 @@ def generate_pdf(student_name: str, date_from: str = None, date_to: str = None, 
     elif date_to:
         date_range = f"to {date_to}"
     
-    pdf_content = generate_pdf_report(student, grades, behaviors, attendances, homeworks, activities, avg_grade, date_range)
+    pdf_content = generate_pdf_report(student, grades, behaviors, attendances, homeworks, activities, progresses, avg_grade, date_range)
     
     return Response(content=pdf_content, media_type="application/pdf", headers={"Content-Disposition": f"attachment; filename=report_{student_name}.pdf"})
 

@@ -603,3 +603,59 @@ class TestParseCommand:
         result = parse_command("/report John --date 2024-03-15")
         assert result["date_from"] == "2024-03-15"
         assert result["date_to"] == "2024-03-15"
+
+
+class TestProgressCommand:
+    def test_progress_basic(self):
+        result = parse_command("/progress John running 3.5")
+        assert result["action"] == "add_progress"
+        assert result["student_name"] == "John"
+        assert result["goal"] == "running"
+        assert result["value"] == 3.5
+
+    def test_progress_integer_value(self):
+        result = parse_command("/progress Ana math-test 87")
+        assert result["action"] == "add_progress"
+        assert result["student_name"] == "Ana"
+        assert result["goal"] == "math-test"
+        assert result["value"] == 87.0
+
+    def test_progress_with_date(self):
+        result = parse_command("/progress John running 5.2 --date 2024-04-10")
+        assert result["action"] == "add_progress"
+        assert result["student_name"] == "John"
+        assert result["goal"] == "running"
+        assert result["value"] == 5.2
+        assert result["date"] == "2024-04-10"
+
+    def test_progress_multi_word_name(self):
+        result = parse_command("/progress Marko Stefanovic weight 72.5")
+        assert result["action"] == "add_progress"
+        assert result["student_name"] == "Marko Stefanovic"
+        assert result["goal"] == "weight"
+        assert result["value"] == 72.5
+
+    def test_progress_alias_prog(self):
+        result = parse_command("/prog John running 3.5")
+        assert result["action"] == "add_progress"
+        assert result["student_name"] == "John"
+        assert result["goal"] == "running"
+        assert result["value"] == 3.5
+
+    def test_progress_too_few_args(self):
+        result = parse_command("/progress John running")
+        assert result["action"] == "error"
+
+    def test_progress_no_value(self):
+        result = parse_command("/progress John running abc")
+        assert result["action"] == "error"
+
+    def test_progress_with_at_date(self):
+        result = parse_command("/progress John running 3.5 --at 2024-04-10")
+        assert result["action"] == "add_progress"
+        assert result["date"] == "2024-04-10"
+
+    def test_progress_decimal_value(self):
+        result = parse_command("/progress Ana weight 62.3")
+        assert result["action"] == "add_progress"
+        assert result["value"] == 62.3

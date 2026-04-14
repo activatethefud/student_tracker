@@ -16,8 +16,9 @@
 │    ├── Uses: /api/behaviors/{id} (PUT/DELETE)                          │
 │    ├── Uses: /api/attendance/{id} (PUT/DELETE)                         │
 │    ├── Uses: /api/homework/{id} (PUT/DELETE)                           │
-│    ├── Uses: /api/activities/{id} (PUT/DELETE)                         │
-│    ├── Uses: /api/students/{name} (PUT/DELETE)                         │
+│     ├── Uses: /api/activities/{id} (PUT/DELETE)                         │
+│     ├── Uses: /api/progress/{id} (PUT/DELETE)                         │
+│     ├── Uses: /api/students/{name} (PUT/DELETE)                         │
 │    └── Uses: localStorage for authToken                                 │
 │                                                                         │
 │  students.html (list all students)                                     │
@@ -49,7 +50,7 @@
 │     └── Uses: commands.parse_command() → determines action              │
 │     └── Actions: add_student, add_grade, add_behavior,                  │
 │                  add_attendance, add_homework, add_activity,           │
-│                  get_report, open_dashboard, list_dashboard            │
+│                  add_progress, get_report, open_dashboard, list_dashboard            │
 │                                                                         │
 │  5. API Endpoints (auth required):                                      │
 │     ├── POST   /api/students        → create student                   │
@@ -59,6 +60,9 @@
 │     ├── POST   /api/attendance      → add attendance                   │
 │     ├── POST   /api/activities      → add activity                     │
 │     ├── GET    /api/students/{name}/report → get report (JSON)         │
+│     ├── POST   /api/progress        → add progress                     │
+│     ├── PUT    /api/progress/{id}    → update progress                  │
+│     ├── DELETE /api/progress/{id}    → delete progress                  │         │
 │     ├── POST   /api/students/{name}/report/pdf → get PDF               │
 │     ├── PUT    /api/grades/{id}     → update grade                    │
 │     ├── DELETE /api/grades/{id}     → delete grade                    │
@@ -96,7 +100,9 @@
 │  ├── /attendance <name> <status> [--date YYYY-MM-DD]                   │
 │  ├── /homework <name> <title> [--due YYYY-MM-DD] [--status <status>]   │
 │  ├── /activity <name> <type> <status> [--date YYYY-MM-DD]              │
-│  │       (type: taking-notes|participation, status: yes|no)            │
+│  │       (type: any; status: yes|no)                                   │
+│  ├── /progress <name> <goal> <value> [--date YYYY-MM-DD]              │
+│  │       (goal: any; value: number)                                      │
 │  ├── /report <name> [--from YYYY-MM-DD] [--to YYYY-MM-DD] [--pdf]      │
 │  ├── /dashboard [<name>] / /dash / /d                                   │
 │  └── /help                                                              │
@@ -133,6 +139,9 @@
 │       └── student: Student (relationship)                               │
 │                                                                         │
 │  Activity (id, student_id, activity_type, status, date, created_at)    │
+│       └── student: Student (relationship)                               │
+│                                                                         │
+│  Progress (id, student_id, goal, value, date, created_at)              │
 │       └── student: Student (relationship)                               │
 │                                                                         │
 │  Behavior (id, student_id, note, behavior_type, created_at)            │

@@ -4,7 +4,7 @@ from sqlalchemy import create_engine
 from sqlalchemy.orm import sessionmaker
 
 from app.main import app, get_db, failed_login_attempts
-from app.models import Base, Student, User
+from app.models import Base, Student, User, Progress
 
 
 TEST_DATABASE_URL = "sqlite:///./test_api.db"
@@ -926,3 +926,137 @@ class TestMultiWordName:
         data = response.json()
         assert data["success"] is True
         assert "focus" in data["message"]
+
+
+class TestProgressAPI:
+    def test_progress_command_adds_progress(self, client, admin_user, student):
+        login = client.post("/token", data={"username": "admin", "password": "test"})
+        token = login.json()["access_token"]
+        
+        response = client.post(
+            "/api/command",
+            json={"command": "/progress John running 3.5"},
+            headers={"Authorization": f"Bearer {token}"}
+        )
+        assert response.status_code == 200
+        data = response.json()
+        assert data["success"] is True
+        assert "running" in data["message"]
+        assert "3.5" in data["message"]
+    
+    def test_progress_api_endpoint(self, client, admin_user, student):
+        login = client.post("/token", data={"username": "admin", "password": "test"})
+        token = login.json()["access_token"]
+        
+        response = client.post(
+            "/api/progress",
+            json={"student_name": "John", "goal": "weight", "value": 72.5},
+            headers={"Authorization": f"Bearer {token}"}
+        )
+        assert response.status_code == 200
+        data = response.json()
+        assert data["success"] is True
+        assert "weight" in data["message"]
+        assert "72.5" in data["message"]
+    
+    def test_progress_command_with_date(self, client, admin_user, student):
+        login = client.post("/token", data={"username": "admin", "password": "test"})
+        token = login.json()["access_token"]
+        
+        response = client.post(
+            "/api/command",
+            json={"command": "/progress John math 87 --date 2024-03-20"},
+            headers={"Authorization": f"Bearer {token}"}
+        )
+        assert response.status_code == 200
+        data = response.json()
+        assert data["success"] is True
+        assert "2024-03-20" in data["message"]
+    
+    def test_progress_with_full_name(self, client, admin_user, db):
+        login = client.post("/token", data={"username": "admin", "password": "test"})
+        token = login.json()["access_token"]
+        
+        client.post("/api/command", json={"command": "/add-student Marko Stefanovic"}, headers={"Authorization": f"Bearer {token}"})
+        
+        response = client.post(
+            "/api/command",
+            json={"command": "/progress Marko Stefanovic weight 72.5"},
+            headers={"Authorization": f"Bearer {token}"}
+        )
+        assert response.status_code == 200
+        data = response.json()
+        assert data["success"] is True
+        assert "weight" in data["message"]
+    
+    def test_progress_cascade_delete(self, client, admin_user, student, db):
+        login = client.post("/token", data={"username": "admin", "password": "test"})
+        token = login.json()["access_token"]
+        
+        client.post(
+            "/api/command",
+            json={"command": "/progress John running 3.5"},
+            headers={"Authorization": f"Bearer {token}"}
+        )
+        
+        progress_records = db.query(Progress).all()
+        assert len(progress_records) == 1
+        
+        response = client.delete("/api/students/John", headers={"Authorization": f"Bearer {token}"})
+        assert response.status_code == 200
+        
+        progress_records = db.query(Progress).all()
+        assert len(progress_records) == 0
+    
+    def test_progress_in_report(self, client, admin_user, student, db):
+        login = client.post("/token", data={"username": "admin", "password": "test"})
+        token = login.json()["access_token"]
+        
+        p1 = Progress(student_id=student.id, goal="running", value=3.5)
+        p2 = Progress(student_id=student.id, goal="running", value=4.0)
+        p3 = Progress(student_id=student.id, goal="weight", value=72.5)
+        db.add_all([p1, p2, p3])
+        db.commit()
+        
+        response = client.post(
+            "/api/command",
+            json={"command": "/report John"},
+            headers={"Authorization": f"Bearer {token}"}
+        )
+        assert response.status_code == 200
+        data = response.json()
+        assert data["success"] is True
+        assert "Progress" in data["message"]
+        assert "running" in data["message"]
+        assert "weight" in data["message"]
+    
+    def test_delete_progress(self, client, admin_user, student, db):
+        login = client.post("/token", data={"username": "admin", "password": "test"})
+        token = login.json()["access_token"]
+        
+        progress = Progress(student_id=student.id, goal="running", value=3.5)
+        db.add(progress)
+        db.commit()
+        
+        response = client.delete(f"/api/progress/{progress.id}", headers={"Authorization": f"Bearer {token}"})
+        assert response.status_code == 200
+        assert response.json()["success"] is True
+    
+    def test_update_progress(self, client, admin_user, student, db):
+        login = client.post("/token", data={"username": "admin", "password": "test"})
+        token = login.json()["access_token"]
+        
+        progress = Progress(student_id=student.id, goal="running", value=3.5)
+        db.add(progress)
+        db.commit()
+        
+        response = client.put(
+            f"/api/progress/{progress.id}",
+            json={"goal": "sprint", "value": 4.2},
+            headers={"Authorization": f"Bearer {token}"}
+        )
+        assert response.status_code == 200
+        
+        db.refresh(progress)
+        assert progress.goal == "sprint"
+        assert progress.value == 4.2

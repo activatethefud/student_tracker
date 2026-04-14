@@ -231,6 +231,35 @@ def parse_command(command: str) -> dict:
                 date_str = args[i + 1]
         return {"action": "add_activity", "student_name": student_name, "activity_type": activity_type, "status": status, "date": date_str}
     
+    if cmd in ("progress", "prog"):
+        if len(args) < 3:
+            return {"action": "error", "message": "Usage: /progress <name> <goal> <value> [--date YYYY-MM-DD]"}
+        value = None
+        value_idx = None
+        for i, arg in enumerate(args):
+            if arg.startswith("--"):
+                break
+            try:
+                value = float(arg)
+                value_idx = i
+                break
+            except ValueError:
+                continue
+        if value is None or value_idx is None:
+            return {"action": "error", "message": "Value must be a number"}
+        if value_idx < 2:
+            return {"action": "error", "message": "Usage: /progress <name> <goal> <value> [--date YYYY-MM-DD]"}
+        goal = args[value_idx - 1].lower()
+        student_name = " ".join(args[:value_idx - 1])
+        if not student_name:
+            return {"action": "error", "message": "Usage: /progress <name> <goal> <value> [--date YYYY-MM-DD]"}
+        date_str = None
+        rest = args[value_idx + 1:]
+        for i, arg in enumerate(rest):
+            if arg in ("--date", "--at") and i + 1 < len(rest):
+                date_str = rest[i + 1]
+        return {"action": "add_progress", "student_name": student_name, "goal": goal, "value": value, "date": date_str}
+    
     if cmd in ("report", "stats"):
         if len(args) < 1:
             return {"action": "error", "message": "Usage: /report <name> [--from YYYY-MM-DD] [--to YYYY-MM-DD] [--pdf]"}
@@ -271,6 +300,7 @@ def parse_command(command: str) -> dict:
 /attendance <name> present|absent|late [--date YYYY-MM-DD] - Mark attendance
 /homework <name> <title> [--due YYYY-MM-DD] [--status <status>] - Add homework
 /activity <name> <type> <status> [--date YYYY-MM-DD] - Record activity (type: any; status: yes/no)
+/progress <name> <goal> <value> [--date YYYY-MM-DD] - Record progress checkpoint (e.g., /progress John running 3.5)
 /report <name> [--from YYYY-MM-DD] [--to YYYY-MM-DD] [--pdf] - Get student report (use name or ID)
 /dashboard <name> - Open student dashboard (use name or ID)
 /dashboard - List all students

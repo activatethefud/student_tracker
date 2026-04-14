@@ -20,6 +20,7 @@ class Student(Base):
     attendances = relationship("Attendance", back_populates="student", cascade="all, delete-orphan")
     homeworks = relationship("Homework", back_populates="student", cascade="all, delete-orphan")
     activities = relationship("Activity", back_populates="student", cascade="all, delete-orphan")
+    progress = relationship("Progress", back_populates="student", cascade="all, delete-orphan")
 
 
 def generate_student_id(session):
@@ -106,6 +107,19 @@ class Activity(Base):
     created_at = Column(DateTime, default=datetime.utcnow)
 
     student = relationship("Student", back_populates="activities")
+
+
+class Progress(Base):
+    __tablename__ = "progress"
+
+    id = Column(Integer, primary_key=True)
+    student_id = Column(Integer, ForeignKey("students.id"), nullable=False)
+    goal = Column(String(100), nullable=False)
+    value = Column(Float, nullable=False)
+    date = Column(DateTime, default=datetime.utcnow)
+    created_at = Column(DateTime, default=datetime.utcnow)
+
+    student = relationship("Student", back_populates="progress")
 
 
 class User(Base):

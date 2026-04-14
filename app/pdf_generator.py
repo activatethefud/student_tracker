@@ -134,7 +134,34 @@ def _activity_bars_html(activities):
     </div>"""
 
 
-def generate_pdf_report(student, grades, behaviors, attendances, homeworks, activities, avg_grade, date_range=""):
+def _progress_chart_html(progresses):
+    if not progresses:
+        return ""
+    progress_goals = sorted(set(p.goal for p in progresses))
+    rows = ""
+    for goal in progress_goals:
+        goal_entries = sorted([p for p in progresses if p.goal == goal], key=lambda x: x.date)
+        latest = goal_entries[-1]
+        values = [p.value for p in goal_entries]
+        min_val = min(values)
+        max_val = max(values)
+        range_val = max_val - min_val if max_val != min_val else 1
+        rows += f"""
+        <div class="bar-row">
+            <div class="bar-label">{goal}</div>
+            <div class="bar-track">
+                <div class="bar-fill" style="width:{min(max_val / (max_val * 1.2 if max_val > 0 else 1) * 100, 100):.0f}%; background:#7c3aed; border-radius:6px"></div>
+            </div>
+            <div class="bar-value" style="color:#7c3aed">{latest.value:.1f}</div>
+        </div>"""
+    return f"""
+    <div class="css-chart">
+        <h3>Progress</h3>
+        {rows}
+    </div>"""
+
+
+def generate_pdf_report(student, grades, behaviors, attendances, homeworks, activities, progresses, avg_grade, date_range=""):
     avg_grade_val = avg_grade if avg_grade else 0
     present = len([a for a in attendances if a.status == "present"])
     absent = len([a for a in attendances if a.status == "absent"])
@@ -161,6 +188,9 @@ def generate_pdf_report(student, grades, behaviors, attendances, homeworks, acti
     act_chart = _activity_bars_html(activities)
     if act_chart:
         chart_parts.append(act_chart)
+    prog_chart = _progress_chart_html(progresses)
+    if prog_chart:
+        chart_parts.append(prog_chart)
     if chart_parts:
         charts_html = f'<div class="charts-row">{"".join(chart_parts)}</div>'
 
@@ -239,6 +269,24 @@ def generate_pdf_report(student, grades, behaviors, attendances, homeworks, acti
                 </div>"""
     else:
         activity_rows = '<p class="empty-msg">No activity records</p>'
+
+    progress_rows = ""
+    if progresses:
+        progress_goals = sorted(set(p.goal for p in progresses))
+        for goal in progress_goals:
+            goal_entries = sorted(
+                [p for p in progresses if p.goal == goal],
+                key=lambda x: x.date, reverse=True
+            )
+            progress_rows += f'<div class="activity-group"><strong>{goal}</strong></div>'
+            for p in goal_entries:
+                progress_rows += f"""
+                <div class="record-card">
+                    <span class="pill" style="background:#7c3aed; color:white">{p.value:.1f}</span>
+                    <span class="record-date">{p.date.strftime('%Y-%m-%d')}</span>
+                </div>"""
+    else:
+        progress_rows = '<p class="empty-msg">No progress records</p>'
 
     html = f"""
     <!DOCTYPE html>
@@ -339,6 +387,8 @@ def generate_pdf_report(student, grades, behaviors, attendances, homeworks, acti
             <h2>Activity</h2>
             {activity_rows}
         </div>
+
+        {f'<div class="section"><h2>Progress</h2>{progress_rows}</div>' if progresses else ''}
 
         <div class="footer">
             Generated on {datetime.now().strftime('%Y-%m-%d %H:%M')} by Student Tracker

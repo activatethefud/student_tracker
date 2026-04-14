@@ -79,6 +79,7 @@
                     <li><code>/attendance John present --date 2024-03-10</code> - Mark attendance</li>
                     <li><code>/homework John "Read chapter 5" --due 2024-04-15</code> - Add homework</li>
                     <li><code>/activity John taking-notes yes</code> - Record activity (type: any; status: yes/no)</li>
+                    <li><code>/progress John running 3.5</code> - Record progress checkpoint (goal: any; value: number)</li>
                     <li><code>/report John --pdf</code> - Download PDF report</li>
                 </ul>
             </div>
@@ -103,6 +104,7 @@
                 <button onclick="quickCommand('/behavior ')" class="text-xs bg-white px-2 py-1 rounded border hover:bg-gray-50 whitespace-nowrap">/behavior</button>
                 <button onclick="quickCommand('/homework ')" class="text-xs bg-white px-2 py-1 rounded border hover:bg-gray-50 whitespace-nowrap">/homework</button>
                 <button onclick="quickCommand('/activity ')" class="text-xs bg-white px-2 py-1 rounded border hover:bg-gray-50 whitespace-nowrap">/activity</button>
+                <button onclick="quickCommand('/progress ')" class="text-xs bg-white px-2 py-1 rounded border hover:bg-gray-50 whitespace-nowrap">/progress</button>
                 <button onclick="quickCommand('/attendance ')" class="text-xs bg-white px-2 py-1 rounded border hover:bg-gray-50 whitespace-nowrap">/attendance</button>
                 <button onclick="quickCommand('/report ')" class="text-xs bg-white px-2 py-1 rounded border hover:bg-gray-50 whitespace-nowrap">/report</button>
                 <button onclick="quickCommand('/dashboard ')" class="text-xs bg-purple-100 px-2 py-1 rounded border border-purple-300 hover:bg-purple-200 whitespace-nowrap">/dashboard</button>
