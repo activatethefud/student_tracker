@@ -4,7 +4,7 @@ from sqlalchemy import create_engine
 from sqlalchemy.orm import sessionmaker
 
 from app.main import app, get_db, failed_login_attempts
-from app.models import Base, Student, User, Progress
+from app.models import Base, Student, User, Progress, Grade, Behavior, Attendance, Homework, Activity
 
 
 TEST_DATABASE_URL = "sqlite:///./test_api.db"
@@ -1060,3 +1060,284 @@ class TestProgressAPI:
         db.refresh(progress)
         assert progress.goal == "sprint"
         assert progress.value == 4.2
+
+
+class TestExportImport:
+    def test_export_empty_db(self, client, admin_user):
+        login = client.post("/token", data={"username": "admin", "password": "test"})
+        token = login.json()["access_token"]
+        
+        response = client.get("/api/export", headers={"Authorization": f"Bearer {token}"})
+        assert response.status_code == 200
+        data = response.json()
+        assert data["version"] == 1
+        assert "students" in data
+        assert "exported_at" in data
+        assert len(data["students"]) == 0
+    
+    def test_export_with_data(self, client, admin_user, student, db):
+        from app.models import Grade, Behavior, Attendance, Homework, Activity
+        login = client.post("/token", data={"username": "admin", "password": "test"})
+        token = login.json()["access_token"]
+        
+        db.add(Grade(student_id=student.id, score=85.0, subject="Math"))
+        db.add(Behavior(student_id=student.id, note="Good work", behavior_type="positive"))
+        db.add(Attendance(student_id=student.id, status="present"))
+        db.add(Homework(student_id=student.id, title="Essay", status="pending"))
+        db.add(Activity(student_id=student.id, activity_type="focus", status="yes"))
+        db.add(Progress(student_id=student.id, goal="running", value=3.5))
+        db.commit()
+        
+        response = client.get("/api/export", headers={"Authorization": f"Bearer {token}"})
+        assert response.status_code == 200
+        data = response.json()
+        assert len(data["students"]) == 1
+        s = data["students"][0]
+        assert s["name"] == "John"
+        assert len(s["grades"]) == 1
+        assert s["grades"][0]["score"] == 85.0
+        assert len(s["behaviors"]) == 1
+        assert len(s["attendances"]) == 1
+        assert len(s["homeworks"]) == 1
+        assert len(s["activities"]) == 1
+        assert len(s["progress"]) == 1
+        assert s["progress"][0]["goal"] == "running"
+        assert s["progress"][0]["value"] == 3.5
+        assert "id" not in s
+        assert "id" not in s["grades"][0]
+    
+    def test_export_requires_auth(self, client):
+        response = client.get("/api/export")
+        assert response.status_code == 401
+    
+    def test_import_replace_mode(self, client, admin_user):
+        login = client.post("/token", data={"username": "admin", "password": "test"})
+        token = login.json()["access_token"]
+        
+        client.post("/api/students", json={"name": "Existing Student"}, headers={"Authorization": f"Bearer {token}"})
+        
+        export_data = {
+            "version": 1,
+            "students": [
+                {
+                    "name": "Imported Student",
+                    "year": "Grade 5",
+                    "details": "Test student",
+                    "grades": [{"score": 90, "subject": "Math"}],
+                    "behaviors": [],
+                    "attendances": [],
+                    "homeworks": [],
+                    "activities": [],
+                    "progress": []
+                }
+            ]
+        }
+        
+        response = client.post(
+            "/api/import?mode=replace",
+            json=export_data,
+            headers={"Authorization": f"Bearer {token}"}
+        )
+        assert response.status_code == 200
+        data = response.json()
+        assert data["success"] is True
+        assert "1 students" in data["message"]
+        
+        students = client.get("/api/students", headers={"Authorization": f"Bearer {token}"}).json()
+        assert len(students) == 1
+        assert students[0]["name"] == "Imported Student"
+    
+    def test_import_merge_mode(self, client, admin_user):
+        login = client.post("/token", data={"username": "admin", "password": "test"})
+        token = login.json()["access_token"]
+        
+        client.post("/api/students", json={"name": "Existing Student"}, headers={"Authorization": f"Bearer {token}"})
+        
+        export_data = {
+            "version": 1,
+            "students": [
+                {
+                    "name": "New Student",
+                    "grades": [],
+                    "behaviors": [],
+                    "attendances": [],
+                    "homeworks": [],
+                    "activities": [],
+                    "progress": []
+                }
+            ]
+        }
+        
+        response = client.post(
+            "/api/import?mode=merge",
+            json=export_data,
+            headers={"Authorization": f"Bearer {token}"}
+        )
+        assert response.status_code == 200
+        data = response.json()
+        assert data["success"] is True
+    
+    def test_import_merge_skips_existing_name(self, client, admin_user):
+        login = client.post("/token", data={"username": "admin", "password": "test"})
+        token = login.json()["access_token"]
+        
+        client.post("/api/students", json={"name": "John"}, headers={"Authorization": f"Bearer {token}"})
+        
+        export_data = {
+            "version": 1,
+            "students": [
+                {
+                    "name": "John",
+                    "grades": [{"score": 100, "subject": "Art"}],
+                    "behaviors": [],
+                    "attendances": [],
+                    "homeworks": [],
+                    "activities": [],
+                    "progress": []
+                }
+            ]
+        }
+        
+        response = client.post(
+            "/api/import?mode=merge",
+            json=export_data,
+            headers={"Authorization": f"Bearer {token}"}
+        )
+        assert response.status_code == 200
+        
+        students = client.get("/api/students", headers={"Authorization": f"Bearer {token}"}).json()
+        assert len(students) == 1
+    
+    def test_import_requires_auth(self, client):
+        response = client.post("/api/import?mode=replace", json={"version": 1, "students": []})
+        assert response.status_code == 401
+    
+    def test_import_rejects_missing_version(self, client, admin_user):
+        login = client.post("/token", data={"username": "admin", "password": "test"})
+        token = login.json()["access_token"]
+        
+        response = client.post(
+            "/api/import?mode=replace",
+            json={"students": []},
+            headers={"Authorization": f"Bearer {token}"}
+        )
+        assert response.status_code == 422
+    
+    def test_import_rejects_future_version(self, client, admin_user):
+        login = client.post("/token", data={"username": "admin", "password": "test"})
+        token = login.json()["access_token"]
+        
+        response = client.post(
+            "/api/import?mode=replace",
+            json={"version": 999, "students": []},
+            headers={"Authorization": f"Bearer {token}"}
+        )
+        assert response.status_code == 400
+        assert "version" in response.json()["detail"].lower()
+    
+    def test_import_rejects_invalid_json(self, client, admin_user):
+        login = client.post("/token", data={"username": "admin", "password": "test"})
+        token = login.json()["access_token"]
+        
+        response = client.post(
+            "/api/import?mode=replace",
+            content=b"not json",
+            headers={"Authorization": f"Bearer {token}", "Content-Type": "application/json"}
+        )
+        assert response.status_code in (400, 422)
+    
+    def test_import_invalid_mode(self, client, admin_user):
+        login = client.post("/token", data={"username": "admin", "password": "test"})
+        token = login.json()["access_token"]
+        
+        response = client.post(
+            "/api/import?mode=invalid",
+            json={"version": 1, "students": []},
+            headers={"Authorization": f"Bearer {token}"}
+        )
+        assert response.status_code == 400
+    
+    def test_export_then_import_roundtrip(self, client, admin_user):
+        login = client.post("/token", data={"username": "admin", "password": "test"})
+        token = login.json()["access_token"]
+        
+        client.post("/api/command", json={"command": "/add-student Alice"}, headers={"Authorization": f"Bearer {token}"})
+        client.post("/api/command", json={"command": "/grade Alice 90 --subject Math"}, headers={"Authorization": f"Bearer {token}"})
+        client.post("/api/command", json={"command": "/progress Alice running 5.0"}, headers={"Authorization": f"Bearer {token}"})
+        
+        export_resp = client.get("/api/export", headers={"Authorization": f"Bearer {token}"})
+        assert export_resp.status_code == 200
+        export_data = export_resp.json()
+        assert len(export_data["students"]) == 1
+        
+        import_resp = client.post(
+            "/api/import?mode=replace",
+            json=export_data,
+            headers={"Authorization": f"Bearer {token}"}
+        )
+        assert import_resp.status_code == 200
+        
+        students = client.get("/api/students", headers={"Authorization": f"Bearer {token}"}).json()
+        assert len(students) == 1
+        assert students[0]["name"] == "Alice"
+    
+    def test_import_preserves_student_id(self, client, admin_user):
+        login = client.post("/token", data={"username": "admin", "password": "test"})
+        token = login.json()["access_token"]
+        
+        export_data = {
+            "version": 1,
+            "students": [
+                {
+                    "student_id": "STU-042",
+                    "name": "Tagged Student",
+                    "grades": [],
+                    "behaviors": [],
+                    "attendances": [],
+                    "homeworks": [],
+                    "activities": [],
+                    "progress": []
+                }
+            ]
+        }
+        
+        response = client.post(
+            "/api/import?mode=replace",
+            json=export_data,
+            headers={"Authorization": f"Bearer {token}"}
+        )
+        assert response.status_code == 200
+        
+        students = client.get("/api/students", headers={"Authorization": f"Bearer {token}"}).json()
+        assert students[0]["student_id"] == "STU-042"
+    
+    def test_import_v1_without_progress_is_backwards_compatible(self, client, admin_user):
+        login = client.post("/token", data={"username": "admin", "password": "test"})
+        token = login.json()["access_token"]
+        
+        export_data = {
+            "version": 1,
+            "students": [
+                {
+                    "name": "Legacy Student",
+                    "grades": [{"score": 75, "subject": "English"}],
+                    "behaviors": [{"note": "Good", "behavior_type": "positive"}],
+                    "attendances": [{"status": "present"}],
+                    "homeworks": [],
+                    "activities": []
+                }
+            ]
+        }
+        
+        response = client.post(
+            "/api/import?mode=replace",
+            json=export_data,
+            headers={"Authorization": f"Bearer {token}"}
+        )
+        assert response.status_code == 200
+        data = response.json()
+        assert data["success"] is True
+        
+        students = client.get("/api/students", headers={"Authorization": f"Bearer {token}"}).json()
+        assert len(students) == 1
+        assert students[0]["name"] == "Legacy Student"

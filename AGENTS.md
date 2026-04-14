@@ -24,6 +24,7 @@ See [ARCHITECTURE.md](./ARCHITECTURE.md) for complete file dependency chain and 
 | New API endpoint | `app/main.py`, `tests/test_api.py` |
 | New page/template | `app/main.py`, `static/new.html`, `tests/test_frontend.py` |
 | New data model | `app/models.py`, `app/main.py`, `app/pdf_generator.py`, `tests/test_api.py` |
+| New export/import | `app/main.py`, `static/index.html`, `tests/test_api.py` |
 | Frontend UI changes | `static/*.html`, `tests/test_frontend.py` |
 
 ## Developer Commands
@@ -65,6 +66,7 @@ https://github.com/activatethefud/student_tracker
 - Use conventional commits (`feat:`, `fix:`, `docs:`)
 - Test single: `pytest -k test_name`
 - ALWAYS push commits to remote after completing changes: `git push origin main`
+- **Backwards compatibility**: All changes must be backwards-compatible. Existing databases must continue to work without manual migration. New fields must have defaults. Import must handle exports from older versions (missing fields/keys). Always test import of older export formats.
 
 ## Reminder
 

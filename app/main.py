@@ -1,7 +1,7 @@
 from datetime import datetime, timedelta, date
 from typing import Optional
 from urllib.parse import quote, unquote
-from fastapi import FastAPI, Depends, HTTPException, status, Response, Request, Cookie
+from fastapi import FastAPI, Depends, HTTPException, status, Response, Request, Cookie, Query
 from fastapi.security import OAuth2PasswordBearer, OAuth2PasswordRequestForm
 from starlette.staticfiles import StaticFiles
 from starlette.templating import Jinja2Templates
@@ -10,6 +10,7 @@ from sqlalchemy.orm import Session
 import bcrypt
 from jose import JWTError, jwt
 from pydantic import BaseModel
+import json
 
 from app.models import Base, get_engine, get_session, Student, Grade, Behavior, Attendance, Homework, Activity, Progress, User, generate_student_id, assign_missing_student_ids
 from app.config import settings
@@ -159,6 +160,15 @@ class ProgressCreate(BaseModel):
     student_name: str
     goal: str  # any user-defined goal
     value: float
+
+
+class ImportData(BaseModel):
+    version: int
+    students: list = []
+    model_config = {"extra": "allow"}
+
+
+EXPORT_VERSION = 1
 
 
 @app.get("/")
@@ -977,6 +987,209 @@ def generate_pdf(student_name: str, date_from: str = None, date_to: str = None, 
     return Response(content=pdf_content, media_type="application/pdf", headers={"Content-Disposition": f"attachment; filename=report_{student_name}.pdf"})
 
 
-if __name__ == "__main__":
+EXPORT_VERSION = 1
+
+
+@app.get("/api/export")
+def export_data(db: Session = Depends(get_db), current_user: User = Depends(get_current_user)):
+    students = db.query(Student).order_by(Student.id).all()
+    data = {
+        "version": EXPORT_VERSION,
+        "exported_at": datetime.utcnow().isoformat(),
+        "students": []
+    }
+    for student in students:
+        s = {
+            "student_id": student.student_id,
+            "name": student.name,
+            "year": student.year,
+            "details": student.details,
+            "created_at": student.created_at.isoformat() if student.created_at else None,
+            "grades": [],
+            "behaviors": [],
+            "attendances": [],
+            "homeworks": [],
+            "activities": [],
+            "progress": []
+        }
+        for g in student.grades:
+            s["grades"].append({
+                "score": g.score,
+                "subject": g.subject,
+                "created_at": g.created_at.isoformat() if g.created_at else None
+            })
+        for b in student.behaviors:
+            s["behaviors"].append({
+                "note": b.note,
+                "behavior_type": b.behavior_type,
+                "created_at": b.created_at.isoformat() if b.created_at else None
+            })
+        for a in student.attendances:
+            s["attendances"].append({
+                "status": a.status,
+                "date": a.date.isoformat() if a.date else None
+            })
+        for h in student.homeworks:
+            s["homeworks"].append({
+                "title": h.title,
+                "due_date": h.due_date.isoformat() if h.due_date else None,
+                "status": h.status,
+                "created_at": h.created_at.isoformat() if h.created_at else None
+            })
+        for a in student.activities:
+            s["activities"].append({
+                "activity_type": a.activity_type,
+                "status": a.status,
+                "date": a.date.isoformat() if a.date else None,
+                "created_at": a.created_at.isoformat() if a.created_at else None
+            })
+        for p in student.progress:
+            s["progress"].append({
+                "goal": p.goal,
+                "value": p.value,
+                "date": p.date.isoformat() if p.date else None,
+                "created_at": p.created_at.isoformat() if p.created_at else None
+            })
+        data["students"].append(s)
+    return data
+
+
+@app.post("/api/import")
+def import_data(mode: str = Query("replace"), body: ImportData = None, db: Session = Depends(get_db), current_user: User = Depends(get_current_user)):
+    if body is None:
+        raise HTTPException(status_code=400, detail="Invalid JSON")
+    
+    if body.version > EXPORT_VERSION:
+        raise HTTPException(status_code=400, detail=f"Unsupported export version: {body.version}. This server supports version {EXPORT_VERSION}.")
+    
+    students_data = body.students
+    if not isinstance(students_data, list):
+        raise HTTPException(status_code=400, detail="Invalid students data")
+    
+    if mode not in ("replace", "merge"):
+        raise HTTPException(status_code=400, detail="Invalid mode. Use 'replace' or 'merge'.")
+    
+    try:
+        if mode == "replace":
+            db.query(Activity).delete()
+            db.query(Progress).delete()
+            db.query(Homework).delete()
+            db.query(Attendance).delete()
+            db.query(Behavior).delete()
+            db.query(Grade).delete()
+            db.query(Student).delete()
+            db.commit()
+        
+        imported_students = 0
+        imported_records = 0
+        
+        for s_data in students_data:
+            if not isinstance(s_data, dict):
+                continue
+            name = s_data.get("name")
+            if not name:
+                continue
+            
+            if mode == "merge":
+                existing = db.query(Student).filter(Student.name == name).first()
+                if existing:
+                    student = existing
+                else:
+                    student = Student(
+                        student_id=s_data.get("student_id"),
+                        name=name,
+                        year=s_data.get("year"),
+                        details=s_data.get("details"),
+                        created_at=_parse_datetime(s_data.get("created_at"))
+                    )
+                    db.add(student)
+                    db.flush()
+            else:
+                student = Student(
+                    student_id=s_data.get("student_id"),
+                    name=name,
+                    year=s_data.get("year"),
+                    details=s_data.get("details"),
+                    created_at=_parse_datetime(s_data.get("created_at"))
+                )
+                db.add(student)
+                db.flush()
+            
+            imported_students += 1
+            
+            for g in s_data.get("grades", []):
+                db.add(Grade(
+                    student_id=student.id,
+                    score=g.get("score", 0),
+                    subject=g.get("subject", "General"),
+                    created_at=_parse_datetime(g.get("created_at"))
+                ))
+                imported_records += 1
+            
+            for b in s_data.get("behaviors", []):
+                db.add(Behavior(
+                    student_id=student.id,
+                    note=b.get("note", ""),
+                    behavior_type=b.get("behavior_type", "neutral"),
+                    created_at=_parse_datetime(b.get("created_at"))
+                ))
+                imported_records += 1
+            
+            for a in s_data.get("attendances", []):
+                db.add(Attendance(
+                    student_id=student.id,
+                    status=a.get("status", "present"),
+                    date=_parse_datetime(a.get("date"))
+                ))
+                imported_records += 1
+            
+            for h in s_data.get("homeworks", []):
+                db.add(Homework(
+                    student_id=student.id,
+                    title=h.get("title", ""),
+                    due_date=_parse_datetime(h.get("due_date")),
+                    status=h.get("status", "pending"),
+                    created_at=_parse_datetime(h.get("created_at"))
+                ))
+                imported_records += 1
+            
+            for a in s_data.get("activities", []):
+                db.add(Activity(
+                    student_id=student.id,
+                    activity_type=a.get("activity_type", ""),
+                    status=a.get("status", "no"),
+                    date=_parse_datetime(a.get("date")),
+                    created_at=_parse_datetime(a.get("created_at"))
+                ))
+                imported_records += 1
+            
+            for p in s_data.get("progress", []):
+                db.add(Progress(
+                    student_id=student.id,
+                    goal=p.get("goal", ""),
+                    value=p.get("value", 0),
+                    date=_parse_datetime(p.get("date")),
+                    created_at=_parse_datetime(p.get("created_at"))
+                ))
+                imported_records += 1
+        
+        assign_missing_student_ids(db)
+        db.commit()
+        
+        return {"success": True, "message": f"Imported {imported_students} students and {imported_records} records ({mode} mode)"}
+    except Exception as e:
+        db.rollback()
+        raise HTTPException(status_code=500, detail=f"Import failed: {str(e)}")
+
+
+def _parse_datetime(value):
+    if value is None:
+        return None
+    if isinstance(value, datetime):
+        return value
+    try:
+        return datetime.fromisoformat(value)
+    except (ValueError, TypeError):
+        return None
     import uvicorn
     uvicorn.run(app, host="0.0.0.0", port=8000)

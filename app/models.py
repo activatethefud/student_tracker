@@ -44,8 +44,7 @@ def assign_missing_student_ids(session):
         if students_without_id:
             session.commit()
     except Exception:
-        # Column might not exist yet - skip assignment
-        pass
+        session.rollback()
 
 
 class Grade(Base):

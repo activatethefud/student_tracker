@@ -113,6 +113,31 @@
     </div>
     </div>
 
+    <div id="import-modal" class="hidden fixed inset-0 bg-black bg-opacity-50 flex items-end sm:items-center justify-center z-50 p-0 sm:p-4">
+        <div class="bg-white rounded-t-lg sm:rounded-lg p-4 sm:p-6 max-w-sm w-full max-h-[90vh] sm:max-h-none overflow-y-auto">
+            <h2 class="text-lg sm:text-xl font-bold mb-4">Import Data</h2>
+            <div id="import-error" class="hidden bg-red-100 text-red-700 p-2 rounded mb-3 text-sm"></div>
+            <div class="space-y-3 sm:space-y-4">
+                <div>
+                    <label class="block text-sm font-medium">Select JSON file</label>
+                    <input type="file" id="import-file" accept=".json" class="w-full border rounded px-3 py-2 text-sm">
+                </div>
+                <div>
+                    <label class="block text-sm font-medium">Import mode</label>
+                    <select id="import-mode" class="w-full border rounded px-3 py-2 text-sm">
+                        <option value="replace">Replace (delete all existing data first)</option>
+                        <option value="merge">Merge (add to existing data)</option>
+                    </select>
+                </div>
+                <p id="import-warning" class="text-yellow-600 text-xs hidden">Warning: Replace mode will delete ALL existing student data before importing.</p>
+                <div class="flex gap-2">
+                    <button onclick="doImport()" class="flex-1 bg-blue-600 text-white py-2 rounded hover:bg-blue-700 text-sm">Import</button>
+                    <button onclick="hideImportModal()" class="flex-1 bg-gray-300 text-gray-700 py-2 rounded hover:bg-gray-400 text-sm">Cancel</button>
+                </div>
+            </div>
+        </div>
+    </div>
+
     <script>
         let authToken = localStorage.getItem('student_tracker_token');
         
@@ -166,7 +191,7 @@
                     localStorage.setItem('student_tracker_token', authToken);
                     hideLogin();
                     document.getElementById('auth-section').innerHTML = 
-                        '<span class="text-green-600">Logged in as ' + username + '</span> <button onclick="logout()" class="ml-2 text-red-500 hover:underline">Logout</button>';
+                        '<span class="text-green-600">Logged in as ' + username + '</span> <button onclick="exportData()" class="ml-2 text-blue-500 hover:underline text-sm">Export</button> <button onclick="showImportModal()" class="text-blue-500 hover:underline text-sm">Import</button> <button onclick="logout()" class="text-red-500 hover:underline text-sm">Logout</button>';
                     addMessage('Logged in successfully!', false);
                 } else if (response.status === 423) {
                     document.getElementById('login-error').textContent = data.detail;
@@ -226,7 +251,7 @@
                     }
                     hideLogin();
                     document.getElementById('auth-section').innerHTML = 
-                        '<span class="text-green-600">Logged in as ' + username + '</span> <button onclick="logout()" class="ml-2 text-red-500 hover:underline">Logout</button>';
+                        '<span class="text-green-600">Logged in as ' + username + '</span> <button onclick="exportData()" class="ml-2 text-blue-500 hover:underline text-sm">Export</button> <button onclick="showImportModal()" class="text-blue-500 hover:underline text-sm">Import</button> <button onclick="logout()" class="text-red-500 hover:underline text-sm">Logout</button>';
                     addMessage(data.message || 'Account reset successfully!', false);
                 } else {
                     document.getElementById('login-error').textContent = data.message || 'Reset failed';
@@ -248,7 +273,7 @@
         
         if (authToken) {
             document.getElementById('auth-section').innerHTML = 
-                '<button onclick="logout()" class="text-red-500 hover:underline">Logout</button>';
+                '<button onclick="exportData()" class="text-blue-500 hover:underline text-sm">Export</button> <button onclick="showImportModal()" class="text-blue-500 hover:underline text-sm">Import</button> <button onclick="logout()" class="text-red-500 hover:underline text-sm">Logout</button>';
         }
         
         const chatBox = document.getElementById('chat-box');
@@ -327,6 +352,84 @@
             const input = document.getElementById('command-input');
             input.value = cmd;
             input.focus();
+        }
+        
+        async function exportData() {
+            if (!authToken) { showLogin(); return; }
+            try {
+                const response = await fetch('/api/export', {
+                    headers: { 'Authorization': 'Bearer ' + authToken }
+                });
+                if (response.status === 401) { showLogin(); return; }
+                if (!response.ok) { addMessage('Export failed: ' + response.statusText, false); return; }
+                const data = await response.json();
+                const blob = new Blob([JSON.stringify(data, null, 2)], { type: 'application/json' });
+                const url = URL.createObjectURL(blob);
+                const a = document.createElement('a');
+                a.href = url;
+                a.download = 'student_tracker_export_' + new Date().toISOString().slice(0, 10) + '.json';
+                document.body.appendChild(a);
+                a.click();
+                document.body.removeChild(a);
+                URL.revokeObjectURL(url);
+                addMessage('Data exported successfully!', false);
+            } catch (err) {
+                addMessage('Export error: ' + err.message, false);
+            }
+        }
+        
+        function showImportModal() {
+            if (!authToken) { showLogin(); return; }
+            document.getElementById('import-modal').classList.remove('hidden');
+            document.getElementById('import-error').classList.add('hidden');
+            document.getElementById('import-file').value = '';
+            document.getElementById('import-mode').value = 'replace';
+            updateImportWarning();
+        }
+        
+        function hideImportModal() {
+            document.getElementById('import-modal').classList.add('hidden');
+        }
+        
+        document.getElementById('import-mode').addEventListener('change', updateImportWarning);
+        function updateImportWarning() {
+            const mode = document.getElementById('import-mode').value;
+            document.getElementById('import-warning').classList.toggle('hidden', mode !== 'replace');
+        }
+        
+        async function doImport() {
+            if (!authToken) { showLogin(); return; }
+            const fileInput = document.getElementById('import-file');
+            const mode = document.getElementById('import-mode').value;
+            if (!fileInput.files.length) {
+                document.getElementById('import-error').textContent = 'Please select a file';
+                document.getElementById('import-error').classList.remove('hidden');
+                return;
+            }
+            try {
+                const text = await fileInput.files[0].text();
+                const data = JSON.parse(text);
+                const response = await fetch('/api/import?mode=' + mode, {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                        'Authorization': 'Bearer ' + authToken
+                    },
+                    body: JSON.stringify(data)
+                });
+                if (response.status === 401) { hideImportModal(); showLogin(); return; }
+                const result = await response.json();
+                if (response.ok && result.success) {
+                    hideImportModal();
+                    addMessage(result.message, false);
+                } else {
+                    document.getElementById('import-error').textContent = result.detail || 'Import failed';
+                    document.getElementById('import-error').classList.remove('hidden');
+                }
+            } catch (err) {
+                document.getElementById('import-error').textContent = 'Invalid file: ' + err.message;
+                document.getElementById('import-error').classList.remove('hidden');
+            }
         }
     </script>
 </body>
